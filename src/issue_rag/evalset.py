@@ -85,14 +85,39 @@ def collect_candidates(
     *,
     max_per_issue: int = 1,
     min_answer_chars: int = MIN_ANSWER_CHARS,
+    stats: dict[str, int] | None = None,
 ) -> list[dict[str, Any]]:
-    """Join issues to their best maintainer answer and keep plausible pairs."""
+    """Join issues to their best maintainer answer and keep plausible pairs.
+
+    ``stats`` is filled with the per-stage counts so the report can show the
+    funnel. The funnel is the honest answer to "why only N items?": every stage
+    that discards data is numbered, rather than hidden behind a final count.
+    """
+    funnel = stats if stats is not None else {}
+    funnel.update(
+        {
+            "comments_total": len(comments),
+            "comments_human": sum(1 for c in comments if not is_bot(c.get("author"))),
+            "comments_maintainer": sum(
+                1
+                for c in comments
+                if c.get("author_association") in MAINTAINER_ROLES
+                and not is_bot(c.get("author"))
+            ),
+        }
+    )
+
     by_issue: dict[int, list[dict[str, Any]]] = {}
     for comment in comments:
         by_issue.setdefault(comment.get("issue_number"), []).append(comment)
 
     seen_titles: set[str] = set()
     candidates: list[dict[str, Any]] = []
+    issues_in_scope = 0
+    issues_with_maintainer = 0
+    issues_with_usable_answer = 0
+    dropped_triage = 0
+    dropped_short = 0
 
     for issue in issues:
         if issue.get("is_pull_request"):
@@ -102,6 +127,7 @@ def collect_candidates(
             continue
         if "duplicate" in [lbl.lower() for lbl in (issue.get("labels") or [])]:
             continue
+        issues_in_scope += 1
         key = normalise_title(title)
         if key in seen_titles:
             continue
@@ -115,6 +141,7 @@ def collect_candidates(
         ]
         if not pool:
             continue
+        issues_with_maintainer += 1
 
         # Prefer the longest maintainer answer that is not triage boilerplate.
         pool.sort(key=lambda c: (-(c.get("reactions") or 0), -len(c.get("body") or "")))
@@ -122,14 +149,17 @@ def collect_candidates(
         for comment in pool:
             body = clean_text(comment["body"])
             if len(body) < min_answer_chars:
+                dropped_short += 1
                 continue
             if LOW_VALUE_ANSWER.search(body) and len(body) < 400:
+                dropped_triage += 1
                 continue
             chosen.append({"comment": comment, "body": body})
             if len(chosen) >= max_per_issue:
                 break
         if not chosen:
             continue
+        issues_with_usable_answer += 1
 
         reference = "\n\n".join(item["body"] for item in chosen)
         if len(reference) > MAX_ANSWER_CHARS:
@@ -155,6 +185,16 @@ def collect_candidates(
         )
 
     candidates.sort(key=lambda c: c.get("issue_created_at") or "", reverse=True)
+    funnel.update(
+        {
+            "issues_in_scope": issues_in_scope,
+            "issues_with_maintainer": issues_with_maintainer,
+            "issues_with_usable_answer": issues_with_usable_answer,
+            "comments_rejected_short": dropped_short,
+            "comments_rejected_triage": dropped_triage,
+            "candidates": len(candidates),
+        }
+    )
     return candidates
 
 
@@ -278,8 +318,12 @@ def main(argv: list[str] | None = None) -> int:
 
     issues = load_jsonl(preset.raw_dir / ISSUES_FILE)
     comments = load_jsonl(preset.raw_dir / COMMENTS_FILE)
+    funnel: dict[str, int] = {}
     candidates = collect_candidates(
-        issues, comments, min_answer_chars=args.min_answer_chars
+        issues,
+        comments,
+        min_answer_chars=args.min_answer_chars,
+        stats=funnel,
     )[: args.max_candidates]
 
     with candidates_path.open("w", encoding="utf-8") as handle:
@@ -296,6 +340,20 @@ def main(argv: list[str] | None = None) -> int:
     print(f"  with version string : {feats['has_version']}")
     print(f"  with file path      : {feats['has_file_path']}")
     print(f"  with code block     : {feats['has_code_block']}")
+    if funnel:
+        print("\nmining funnel (every stage that discards data):")
+        print(f"  comments harvested          {funnel.get('comments_total', 0):>6}")
+        print(f"  - automated accounts        {funnel.get('comments_total', 0) - funnel.get('comments_human', 0):>6}")
+        print(f"  = human comments            {funnel.get('comments_human', 0):>6}")
+        print(f"    of which maintainer       {funnel.get('comments_maintainer', 0):>6}")
+        print(f"  issues in scope             {funnel.get('issues_in_scope', 0):>6}")
+        print(f"  - no maintainer reply       {funnel.get('issues_in_scope', 0) - funnel.get('issues_with_maintainer', 0):>6}")
+        print(f"  = with maintainer reply     {funnel.get('issues_with_maintainer', 0):>6}")
+        print(f"  - answer too short          {funnel.get('comments_rejected_short', 0):>6}")
+        print(f"  - triage boilerplate        {funnel.get('comments_rejected_triage', 0):>6}")
+        print(f"  = usable question/answer    {funnel.get('issues_with_usable_answer', 0):>6}")
+        print(f"  - duplicate titles          {funnel.get('issues_with_usable_answer', 0) - len(candidates):>6}")
+        print(f"  = candidates                {len(candidates):>6}")
     print(f"-> {candidates_path}")
     print(f"-> {review_path}   (fill keep_1_or_0, then rerun with --finalize)")
     return 0
