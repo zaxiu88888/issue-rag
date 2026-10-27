@@ -1,0 +1,20 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      # Only the light dependencies: the unit tests deliberately avoid torch so
+      # CI stays under a minute and needs no GPU.
+      - run: pip install numpy PyYAML rank_bm25 pytest
+      - run: pytest -q

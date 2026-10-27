@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "issue-rag"
+version = "0.1.0"
+description = "Measured retrieval-augmented support assistant over GitHub issues"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = [
+  "numpy>=1.26",
+  "PyYAML>=6.0",
+  "rank_bm25>=0.2.2",
+  "tqdm>=4.66",
+]
+
+[project.optional-dependencies]
+models = [
+  "torch>=2.4",
+  "transformers>=4.46",
+  "sentence-transformers>=3.2",
+  "accelerate>=1.0",
+  "modelscope>=1.20",
+]
+dev = ["pytest>=8.0"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+# -p no:cacheprovider: the cache writes a temp directory that some Windows
+# sandboxed environments refuse, which turns a clean run into a warning storm.
+addopts = "-q -p no:cacheprovider"

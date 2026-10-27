@@ -1,0 +1,4 @@
+﻿id,keep_1_or_0,issue_created,question,reference_answer_preview,has_version,has_code_block,issue_url,review_notes
+q23892,,2026-10-25,[Docs] Vietnamese UTF-8 diacritics handling in CSS custom properties and asset pipeline,CSS works with UTF-8 so I don't think we need to clarify this in the docs.,0,0,https://github.com/vitejs/vite/issues/23892,
+q23891,,2026-10-25,[Docs] Vietnamese (UTF-8 diacritics) characters handling in CSS and asset pipeline,CSS works with UTF-8 so I don't think we need to clarify this in the docs.,0,0,https://github.com/vitejs/vite/issues/23891,
+q20692,,2025-08-27,Persist esbuild.mangleCache between builds,This is now possible if Rolldown supports it. Let's track this at https://github.com/rolldown/rolldown/issues/10771,0,0,https://github.com/vitejs/vite/issues/20692,

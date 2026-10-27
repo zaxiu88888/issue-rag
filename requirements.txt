@@ -1,0 +1,20 @@
+# Core
+torch>=2.4
+transformers>=4.46
+sentence-transformers>=3.2
+accelerate>=1.0
+numpy>=1.26
+
+# Retrieval
+rank_bm25>=0.2.2
+
+# Utilities
+PyYAML>=6.0
+tqdm>=4.66
+
+# Model downloads (PyPI mirror of HuggingFace, used because huggingface.co is
+# unreachable on this network; remove if you have direct HF access)
+modelscope>=1.20
+
+# Dev
+pytest>=8.0

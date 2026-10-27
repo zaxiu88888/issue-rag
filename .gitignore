@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.tmp/
+.probe_target/
+
+# Harvested raw data: large and fully regenerable from the API
+data/raw/
+data/cache/
+data/wheels/
+data/models/
+
+# Corpus is a build artifact (megabytes, deterministic from data/raw)
+data/processed/**/corpus.jsonl
+data/processed/**/corpus_stats.json
+
+# NOT ignored, deliberately:
+#   data/processed/**/evalset.jsonl         <- the deliverable
+#   data/processed/**/evalset_review.csv    <- audit trail for the keep/drop
+#   data/results/**                         <- measured evidence behind the README
+
+# Model weights
+*.safetensors
+*.bin
+*.gguf
+*.whl
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Secrets
+.env
+
+pytest-cache-files-*

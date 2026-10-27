@@ -1,0 +1,55 @@
+# Target repositories for the support-assistant corpus.
+#
+# How to choose one:
+#   1. You must know the domain well enough to judge whether an answer is
+#      correct by hand. That is what makes your eval set trustworthy, and the
+#      eval set is the actual deliverable of this project.
+#   2. High issue volume with maintainer replies in the *last 6-12 months*.
+#      Recency is not optional: if the model has already seen the answer during
+#      pretraining, retrieval shows no gain and the experiment proves nothing.
+#   3. Repeated question shapes. Duplicated questions are free evidence that a
+#      retrieval layer is worth building.
+#   4. **Low bot density.** This one is easy to miss and it can kill the project.
+#      A single automated account that comments on every issue floods the recent
+#      comment stream, and since the API returns comments newest-first, a bot
+#      flood means you harvest almost no human answers at all.
+#
+# Measured on the 50 most recent comments per repo (maintainer = MEMBER/OWNER/
+# COLLABORATOR association), which is a one-request check worth running before
+# committing to a target:
+#
+#   vitejs/vite              40% maintainer, 20% bots   <- chosen
+#   ollama/ollama            32% maintainer,  0% bots
+#   vercel/ai                 8% maintainer, 84% bots   <- rejected, see note
+#   langchain-ai/langchainjs  2% maintainer, 72% bots   <- rejected
+#
+# Swapping preset is a one-line change; every stage reads it from here.
+
+presets:
+  vite:
+    repo: vitejs/vite
+    display_name: "Vite"
+    language: typescript
+    notes: >-
+      Build tool with a maintainer-dense issue stream. Bug reports are
+      reproduction-heavy and maintainer replies name exact versions, which makes
+      "which version fixed this / which plugin config is wrong" the dominant
+      question family -- a strong hallucination probe.
+
+  ollama:
+    repo: ollama/ollama
+    display_name: "Ollama"
+    language: go
+    notes: >-
+      Nearly bot-free issue traffic and a 32% maintainer reply rate. GPU/driver
+      and Modelfile questions. Good second domain for testing whether the
+      BM25/dense balance is a property of the domain or of one corpus.
+
+  vercel-ai:
+    repo: vercel/ai
+    display_name: "Vercel AI SDK"
+    language: typescript
+    notes: >-
+      Kept as a documented negative result: 84% of a 2000-comment sample came
+      from two automated accounts, leaving 10 usable eval candidates out of 600
+      issues. Useful if you want to study bot-dominance effects on retrieval.

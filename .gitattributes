@@ -1,0 +1,6 @@
+# Keep line endings stable across platforms so diffs stay reviewable.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.whl binary
+*.safetensors binary
