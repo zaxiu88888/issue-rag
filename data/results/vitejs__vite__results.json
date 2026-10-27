@@ -1,0 +1,39 @@
+{
+  "summaries": [
+    {
+      "system": "closed_book",
+      "n": 3,
+      "accuracy": 0.6667,
+      "correct_rate": 66.7,
+      "partial_rate": 0.0,
+      "incorrect_rate": 33.3,
+      "unparsed_rate": 0.0,
+      "fabricated_rate": 0.0,
+      "cited_rate": 0.0,
+      "latency_p50_s": 4.28,
+      "latency_p95_s": 4.4
+    },
+    {
+      "system": "bm25",
+      "n": 3,
+      "accuracy": 1.0,
+      "correct_rate": 100.0,
+      "partial_rate": 0.0,
+      "incorrect_rate": 0.0,
+      "unparsed_rate": 0.0,
+      "fabricated_rate": 0.0,
+      "cited_rate": 100.0,
+      "latency_p50_s": 3.61,
+      "latency_p95_s": 3.87
+    }
+  ],
+  "retrieval": {
+    "bm25": {
+      "recall@5": 1.0,
+      "recall@5_loo": 0.0,
+      "mrr": 0.8333,
+      "mrr_loo": 0.0
+    }
+  },
+  "n_items": 3
+}

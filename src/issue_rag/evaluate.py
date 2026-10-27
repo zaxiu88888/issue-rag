@@ -255,6 +255,8 @@ def write_report(
     retrieval: dict[str, dict[str, float]],
     args: argparse.Namespace,
     n_items: int,
+    subgroup: list[dict[str, Any]] | None = None,
+    n_subgroup: int = 0,
 ) -> Path:
     lines: list[str] = []
     lines.append(f"# Results — {preset.display_name} (`{preset.repo}`)\n")
@@ -286,6 +288,29 @@ def write_report(
         "_accuracy = correct(1.0) + partial(0.5) averaged; fabricated = judge "
         "flagged an invented version/API/path._\n"
     )
+
+    if subgroup:
+        lines.append(
+            f"## Where retrieval actually matters (n={n_subgroup})\n"
+        )
+        lines.append(
+            "Restricted to the items the closed-book model got **wrong**. On items "
+            "the model already answers from memory, retrieval has nothing to add, "
+            "and including them dilutes the comparison. This is a subgroup of the "
+            "same run, not a filtered eval set: the closed-book row above still "
+            "counts every item, so the full table is not cherry-picked.\n"
+        )
+        lines.append("| system | accuracy | correct | partial | incorrect | fabricated |")
+        lines.append("|---|---|---|---|---|---|")
+        for row in subgroup:
+            if not row.get("n"):
+                continue
+            lines.append(
+                f"| `{row['system']}` | {row['accuracy']:.3f} | {row['correct_rate']}% | "
+                f"{row['partial_rate']}% | {row['incorrect_rate']}% | "
+                f"{row['fabricated_rate']}% |"
+            )
+        lines.append("")
 
     if retrieval:
         lines.append(f"## Retrieval (reference issue found in top-{args.top_k})\n")
@@ -392,6 +417,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"[retrieval:{system}] {retrieval[system]}")
 
     summaries: list[dict[str, Any]] = []
+    subgroup: list[dict[str, Any]] = []
+    n_subgroup = 0
     if not args.retrieval_only:
         model = make_model(args)
         args.resolved_model = model.name
@@ -409,11 +436,36 @@ def main(argv: list[str] | None = None) -> int:
                 )
             )
 
-    report = write_report(preset, summaries, retrieval, args, len(items))
+        # Subgroup analysis: restrict to items the closed-book model got wrong.
+        # Reporting this separately avoids the two bad options -- either diluting
+        # the comparison with items the model already knows, or filtering the
+        # eval set so the closed-book baseline is zero by construction.
+        closed_path = shard_path(preset, "closed_book")
+        if closed_path.exists():
+            closed = load_shard(closed_path)
+            hard = {iid for iid, rec in closed.items() if rec.get("score", 0) < 1.0}
+            n_subgroup = len(hard)
+            for system in systems:
+                records = [
+                    rec
+                    for iid, rec in load_shard(shard_path(preset, system)).items()
+                    if iid in hard
+                ]
+                subgroup.append(summarise(records, system))
+
+    report = write_report(
+        preset, summaries, retrieval, args, len(items), subgroup, n_subgroup
+    )
     print(f"\n-> {report}")
     (RESULTS_DIR / f"{preset.slug}__results.json").write_text(
         json.dumps(
-            {"summaries": summaries, "retrieval": retrieval, "n_items": len(items)},
+            {
+                "summaries": summaries,
+                "retrieval": retrieval,
+                "n_items": len(items),
+                "n_closed_book_missed": n_subgroup,
+                "subgroup_closed_book_missed": subgroup,
+            },
             ensure_ascii=False,
             indent=2,
         ),

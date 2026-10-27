@@ -47,7 +47,9 @@ def load_env_file(path: pathlib.Path | None = None) -> list[str]:
         key, _, value = line.partition("=")
         key = key.strip()
         value = value.strip().strip('"').strip("'")
-        if key and key not in os.environ:
+        # An empty value in the file means "not configured": setting it would
+        # shadow a real GH_TOKEN or provider default with an empty string.
+        if key and value and key not in os.environ:
             os.environ[key] = value
             loaded.append(key)
     return loaded
