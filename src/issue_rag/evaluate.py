@@ -42,12 +42,15 @@ RAG_SYSTEM_PROMPT = (
     "You are a support engineer for {repo}. Answer the user's question using "
     "ONLY the numbered issue excerpts below.\n\n"
     "Rules:\n"
-    "1. Cite the excerpts you rely on with bracketed numbers, e.g. [1].\n"
-    "2. If an excerpt names a version, file, or API, prefer that exact wording.\n"
-    "3. Do NOT guess a version number, file path, or API name that is not in the "
+    "1. Answer the question itself. Do NOT reply with a summary of the thread "
+    "(\"this is tracked in issue #123\" is not an answer) unless the thread's "
+    "only content is a link to another thread.\n"
+    "2. Cite the excerpts you rely on with bracketed numbers, e.g. [1].\n"
+    "3. If an excerpt names a version, file, or API, prefer that exact wording.\n"
+    "4. Do NOT guess a version number, file path, or API name that is not in the "
     "excerpts. If the excerpts do not answer the question, say exactly what is "
     "missing instead of inventing an answer.\n"
-    "4. Be concise: at most six sentences plus a short code snippet if needed."
+    "5. Be concise: at most six sentences plus a short code snippet if needed."
 )
 
 CLOSED_BOOK_SYSTEM_PROMPT = (
@@ -166,7 +169,9 @@ def run_system(
 
     shard = shard_path(preset, system)
     done = load_shard(shard)
-    print(f"\n[{system}] resuming with {len(done)}/{len(items)} items done")
+    valid_ids = {item["id"] for item in items}
+    already = len(valid_ids & set(done))
+    print(f"\n[{system}] resuming with {already}/{len(items)} items done")
 
     with shard.open("a", encoding="utf-8") as handle:
         for position, item in enumerate(items, start=1):
@@ -217,7 +222,14 @@ def run_system(
                 f"{grade.verdict:<9} {generation.latency_s:5.1f}s  {generation.text[:60]!r}"
             )
 
-    return summarise(load_shard(shard).values(), system)
+    # Summarise only the items in the current eval set. A shard is a cache keyed
+    # by item id, so it can still hold results for items that have since been
+    # dropped during review; counting those silently inflates n and drags every
+    # metric with them.
+    valid_ids = {item["id"] for item in items}
+    return summarise(
+        (rec for iid, rec in load_shard(shard).items() if iid in valid_ids), system
+    )
 
 
 def summarise(records: Any, system: str) -> dict[str, Any]:
@@ -442,7 +454,10 @@ def main(argv: list[str] | None = None) -> int:
         # eval set so the closed-book baseline is zero by construction.
         closed_path = shard_path(preset, "closed_book")
         if closed_path.exists():
-            closed = load_shard(closed_path)
+            valid_ids = {item["id"] for item in items}
+            closed = {
+                iid: rec for iid, rec in load_shard(closed_path).items() if iid in valid_ids
+            }
             hard = {iid for iid, rec in closed.items() if rec.get("score", 0) < 1.0}
             n_subgroup = len(hard)
             for system in systems:

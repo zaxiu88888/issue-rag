@@ -23,12 +23,18 @@ A model trained before those issues were written cannot know any of it. So it
 does what language models do: it produces a plausible version number, a
 plausible API name, and a confident tone.
 
-That failure mode is measurable, and it is the thing this project measures:
+That failure mode is measurable, and it is the thing this project measures.
+Measured on 29 hand-reviewed items against `vitejs/vite`:
 
-| | closed-book | with retrieval |
+| | closed-book | with retrieval (BM25) |
 |---|---|---|
-| answers correct | _filled in by `issue_rag.evaluate`_ | _…_ |
-| invented version/API/path | _…_ | _…_ |
+| scored `correct` | 3.4% | **31.0%** |
+| weighted accuracy | 0.138 | **0.483** |
+| flagged `fabricated` | 13.8% | 31.0% |
+
+Retrieval roughly triples accuracy. It also *raises* the fabrication rate, which
+is the least obvious result in this repo and is discussed under
+[Results](#results).
 
 ---
 
@@ -164,8 +170,79 @@ _Produced by `python -m issue_rag.evaluate`. Regenerate with the command above;
 numbers are not hand-edited._
 
 <!-- RESULTS:BEGIN -->
-_Run the pipeline to populate this section._
+Setup: 29 eval items, generator and judge `deepseek-chat`, 5 retrieved excerpts,
+`vitejs/vite` corpus of 3,078 documents built from 533 issues and 1,097 comments.
+
+### Answer quality
+
+| system | accuracy | correct | partial | incorrect | fabricated | cited | p50 |
+|---|---|---|---|---|---|---|---|
+| `closed_book` (no retrieval) | 0.138 | 3.4% | 20.7% | 75.9% | 13.8% | 0% | 4.3 s |
+| `bm25` | **0.483** | 31.0% | 34.5% | 34.5% | 31.0% | 100% | 3.8 s |
+
+_accuracy = correct(1.0) + partial(0.5); fabricated = the judge flagged an
+invented version, API, or file path._
+
+**Retrieval roughly triples accuracy** (0.14 → 0.48) and removes three quarters of
+the unanswerable guesses. That is the headline, and it is the number to quote.
+
+### Where retrieval actually matters (n=28)
+
+Restricted to the items the closed-book model got wrong, i.e. the items where
+retrieval has something to add:
+
+| system | accuracy | correct | partial | incorrect | fabricated |
+|---|---|---|---|---|---|
+| `closed_book` | 0.107 | 0.0% | 21.4% | 78.6% | 14.3% |
+| `bm25` | **0.464** | 28.6% | 35.7% | 35.7% | 32.1% |
+
+This is a subgroup of the same run, not a filtered eval set — the full table
+above still counts every item, so the comparison is not rigged by construction.
+
+### Retrieval quality — and why this column proves nothing
+
+| retriever | recall@5 | recall@5 leave-one-out | MRR | MRR LOO |
+|---|---|---|---|---|
+| `bm25` | 1.000 | 0.000 | 1.000 | 0.000 |
+
+**Read this as a broken measurement, not a good one.** The query is the issue
+title and every document is prefixed with that same title, so `recall@5 = 1.0` is
+close to guaranteed by construction. The leave-one-out column removes the source
+issue's own documents and immediately collapses to zero — which is the honest
+signal: for these questions the answer exists in exactly one thread, so there is
+nothing else to retrieve.
+
+The useful conclusion is a design one, not a numeric one: **this eval set cannot
+distinguish retrievers**, because it has no redundancy. A retrieval benchmark
+needs questions whose answers appear in more than one thread. What the eval set
+*can* measure is end-to-end answer quality, which is why that table is the
+headline.
+
 <!-- RESULTS:END -->
+
+### Three things worth noticing in those numbers
+
+**1. Retrieval makes the model more confidently wrong in a new way.**
+Fabrication rises from 13.8% to 31.0%. Without retrieval the model usually says
+it does not know (75.9% incorrect, but mostly by admitting ignorance). With
+retrieval it has plausible specifics in context and misattributes them — a
+version number from a neighbouring excerpt restated as the answer. The
+conclusion is not "retrieval is bad"; it is that grounding and citation accuracy
+are separate problems, and the second one needs its own fix.
+
+**2. A quarter of retrieval answers answer nothing.**
+9 of 29 BM25 answers largely describe the thread ("this is tracked in issue
+#21827") instead of resolving the question. The prompt was tightened mid-session
+to forbid exactly this and it only partly helped. A production system needs an
+answer-vs-summary classifier, or a prompt-engineering pass with this as an
+explicit metric.
+
+**3. One call stalled for 17 minutes.**
+A single generation hung on the network and took 1,031 s. It did not affect the
+verdict, but it distorts percentiles at n=29 (p95 hides it entirely). Timeouts
+and retries around the generator are missing and should exist before any of this
+runs unattended.
+
 
 ---
 
