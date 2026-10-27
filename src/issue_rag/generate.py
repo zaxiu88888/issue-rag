@@ -124,7 +124,6 @@ class OpenAICompatChatModel:
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
         self.timeout_s = timeout_s
-
     def chat(
         self,
         messages: list[dict[str, str]],
@@ -162,3 +161,83 @@ class OpenAICompatChatModel:
             output_tokens=usage.get("completion_tokens", 0),
             latency_s=latency,
         )
+
+
+# --------------------------------------------------------------------- provider
+
+
+class MissingCredential(RuntimeError):
+    """The chosen provider needs a key that is not in the environment."""
+
+
+# Shorthands so the common cases are one flag instead of three. Anything
+# OpenAI-compatible can also be addressed directly with --endpoint <url>.
+PROVIDERS: dict[str, dict[str, str]] = {
+    "local": {},
+    "deepseek": {
+        "base_url": "https://api.deepseek.com/v1",
+        "model": "deepseek-chat",
+        "key_env": "DEEPSEEK_API_KEY",
+    },
+    "openai": {
+        "base_url": "https://api.openai.com/v1",
+        "model": "gpt-4o-mini",
+        "key_env": "OPENAI_API_KEY",
+    },
+    "siliconflow": {
+        "base_url": "https://api.siliconflow.cn/v1",
+        "model": "Qwen/Qwen2.5-7B-Instruct",
+        "key_env": "SILICONFLOW_API_KEY",
+    },
+    "ollama": {
+        "base_url": "http://127.0.0.1:11434/v1",
+        "model": "qwen2.5:7b",
+        "key_env": "OLLAMA_API_KEY",
+    },
+}
+
+
+def resolve_model(
+    *,
+    provider: str = "local",
+    endpoint: str = "",
+    model: str = "",
+    local_default: str = "data/models/Qwen2.5-3B-Instruct",
+) -> ChatModel:
+    """Build the chat model from CLI flags plus whatever is in ``.env``.
+
+    Precedence: an explicit ``--endpoint`` URL always wins; otherwise the named
+    provider's base URL is used; ``--model`` overrides the provider default so
+    you can point at a different model on the same service.
+    """
+    import os
+
+    if provider not in PROVIDERS:
+        raise SystemExit(
+            f"unknown provider {provider!r}; choose from {sorted(PROVIDERS)} "
+            "or pass --endpoint <url>"
+        )
+    spec = PROVIDERS[provider]
+
+    # A bare --endpoint pointing at a local server, with no provider chosen.
+    if endpoint and provider == "local":
+        return OpenAICompatChatModel(
+            endpoint, model or local_default, os.environ.get("OPENAI_API_KEY", "not-needed")
+        )
+
+    if provider == "local" and not endpoint:
+        return LocalChatModel(model or local_default)
+
+    base_url = endpoint or spec.get("base_url", "")
+    served_model = model or spec.get("model", "")
+    key_env = spec.get("key_env", "")
+    api_key = os.environ.get(key_env, "") if key_env else "not-needed"
+
+    if key_env and not api_key:
+        raise MissingCredential(
+            f"provider {provider!r} needs {key_env}.\n"
+            f"Put it in {os.path.join(os.getcwd(), '.env')} as:\n"
+            f"    {key_env}=sk-...\n"
+            "or export it in the shell that runs the command."
+        )
+    return OpenAICompatChatModel(base_url, served_model, api_key or "not-needed")

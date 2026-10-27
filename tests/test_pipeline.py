@@ -281,3 +281,61 @@ def test_build_documents_ignores_comments_for_unknown_issues():
     comments = [_comment(99, number=424242)]
     docs = [d for d in build_documents(issues, comments, "o/r") if d["kind"] == "issue_comment"]
     assert docs == []
+
+
+# --------------------------------------------------------------- provider config
+
+
+def test_resolve_model_requires_a_key(monkeypatch):
+    from issue_rag.generate import MissingCredential, resolve_model
+
+    monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
+    with pytest.raises(MissingCredential):
+        resolve_model(provider="deepseek")
+
+
+def test_resolve_model_uses_provider_defaults(monkeypatch):
+    from issue_rag.generate import OpenAICompatChatModel, resolve_model
+
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-test")
+    model = resolve_model(provider="deepseek")
+    assert isinstance(model, OpenAICompatChatModel)
+    assert model.base_url == "https://api.deepseek.com/v1"
+    assert model.name == "deepseek-chat"
+    assert model.api_key == "sk-test"
+
+
+def test_resolve_model_explicit_endpoint_wins(monkeypatch):
+    from issue_rag.generate import resolve_model
+
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-test")
+    model = resolve_model(
+        provider="deepseek", endpoint="http://127.0.0.1:8000/v1", model="local-served"
+    )
+    assert model.base_url == "http://127.0.0.1:8000/v1"
+    assert model.name == "local-served"
+
+
+def test_resolve_model_rejects_unknown_provider():
+    from issue_rag.generate import resolve_model
+
+    with pytest.raises(SystemExit):
+        resolve_model(provider="not-a-provider")
+
+
+def test_load_env_file_does_not_override_existing(tmp_path, monkeypatch):
+    from issue_rag.config import load_env_file
+
+    env_file = tmp_path / ".env"
+    env_file.write_text('A_NEW_KEY=from-file\nA_SET_KEY=from-file\n# comment\n\nB=2\n', encoding="utf-8")
+    monkeypatch.delenv("A_NEW_KEY", raising=False)
+    monkeypatch.setenv("A_SET_KEY", "from-env")
+
+    loaded = load_env_file(env_file)
+
+    import os
+
+    assert os.environ["A_NEW_KEY"] == "from-file"
+    assert os.environ["A_SET_KEY"] == "from-env", "existing environment must win"
+    assert os.environ["B"] == "2"
+    assert "A_SET_KEY" not in loaded

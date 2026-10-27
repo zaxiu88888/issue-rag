@@ -19,10 +19,10 @@ import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 
-from .config import RepoPreset, load_preset
+from .config import RepoPreset, load_env_file, load_preset
 from .corpus import load_jsonl
 from .evaluate import RAG_SYSTEM_PROMPT, build_context
-from .generate import LocalChatModel
+from .generate import resolve_model
 from .retrieval import Corpus, build_retriever
 
 STATE: dict[str, Any] = {}
@@ -136,7 +136,14 @@ class Handler(BaseHTTPRequestHandler):
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Serve the demo UI")
     parser.add_argument("--preset", default="vite")
-    parser.add_argument("--model", default="data/models/Qwen2.5-3B-Instruct")
+    parser.add_argument(
+        "--provider",
+        default="local",
+        choices=("local", "deepseek", "openai", "siliconflow", "ollama"),
+    )
+    parser.add_argument("--endpoint", default="", help="explicit OpenAI-compatible base URL")
+    parser.add_argument("--model", default="", help="override the provider's default model")
+    parser.add_argument("--local-model", default="data/models/Qwen2.5-3B-Instruct")
     parser.add_argument("--dense-model", default="data/models/bge-base-en-v1.5")
     parser.add_argument("--reranker-model", default="data/models/bge-reranker-base")
     parser.add_argument("--retrieval", default="hybrid_rerank")
@@ -145,6 +152,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--port", type=int, default=8000)
     args = parser.parse_args(argv)
 
+    load_env_file()
     preset = load_preset(args.preset)
     corpus = Corpus.load(preset.processed_dir / "corpus.jsonl")
     print(f"corpus: {len(corpus)} documents")
@@ -161,7 +169,12 @@ def main(argv: list[str] | None = None) -> int:
                 reranker_model=args.reranker_model,
                 device=None,
             ),
-            "model": LocalChatModel(args.model),
+            "model": resolve_model(
+                provider=args.provider,
+                endpoint=args.endpoint,
+                model=args.model,
+                local_default=args.local_model,
+            ),
         }
     )
 

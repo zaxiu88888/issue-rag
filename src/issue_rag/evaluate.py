@@ -28,10 +28,10 @@ import time
 from pathlib import Path
 from typing import Any
 
-from .config import RESULTS_DIR, RepoPreset, load_preset
+from .config import RESULTS_DIR, RepoPreset, load_env_file, load_preset
 from .corpus import load_jsonl
 from .evalset import EVALSET_FILE
-from .generate import ChatModel, LocalChatModel, OpenAICompatChatModel
+from .generate import ChatModel, resolve_model
 from .judge import Judge
 from .retrieval import Corpus, build_retriever
 
@@ -259,8 +259,9 @@ def write_report(
     lines: list[str] = []
     lines.append(f"# Results — {preset.display_name} (`{preset.repo}`)\n")
     lines.append(f"- evaluation items: **{n_items}**")
-    lines.append(f"- generator: `{args.model}`")
-    lines.append(f"- judge: `{args.model}` (same model, greedy decoding)")
+    generator = getattr(args, "resolved_model", None) or args.model or args.local_model
+    lines.append(f"- generator: `{generator}`")
+    lines.append(f"- judge: `{generator}` (same model, greedy decoding)")
     lines.append(f"- top-k retrieved: {args.top_k}")
     lines.append("")
 
@@ -319,7 +320,18 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--systems", default=",".join(DEFAULT_SYSTEMS))
     parser.add_argument("--top-k", type=int, default=5)
     parser.add_argument("--limit", type=int, default=0, help="0 = all eval items")
-    parser.add_argument("--model", default="data/models/Qwen2.5-3B-Instruct")
+    parser.add_argument(
+        "--provider",
+        default="local",
+        choices=("local", "deepseek", "openai", "siliconflow", "ollama"),
+        help="serving backend; 'local' loads weights from disk, the others call an API",
+    )
+    parser.add_argument("--model", default="", help="override the provider's default model")
+    parser.add_argument(
+        "--local-model",
+        default="data/models/Qwen2.5-3B-Instruct",
+        help="weights path used when --provider local",
+    )
     parser.add_argument("--dense-model", default="data/models/bge-base-en-v1.5")
     parser.add_argument("--reranker-model", default="data/models/bge-reranker-base")
     parser.add_argument("--device", default=None)
@@ -327,20 +339,26 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--endpoint",
         default="",
-        help="OpenAI-compatible base URL; when set, --model is the served model name",
+        help="explicit OpenAI-compatible base URL; overrides --provider's URL",
     )
     parser.add_argument("--retrieval-only", action="store_true")
     return parser
 
 
 def make_model(args: argparse.Namespace) -> ChatModel:
-    if args.endpoint:
-        return OpenAICompatChatModel(args.endpoint, args.model)
-    return LocalChatModel(args.model)
+    return resolve_model(
+        provider=args.provider,
+        endpoint=args.endpoint,
+        model=args.model,
+        local_default=args.local_model,
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    loaded = load_env_file()
+    if loaded:
+        print(f"loaded from .env: {', '.join(loaded)}")
     preset = load_preset(args.preset)
 
     evalset_path = preset.processed_dir / EVALSET_FILE
@@ -376,6 +394,7 @@ def main(argv: list[str] | None = None) -> int:
     summaries: list[dict[str, Any]] = []
     if not args.retrieval_only:
         model = make_model(args)
+        args.resolved_model = model.name
         judge = Judge(model)
         for system in systems:
             summaries.append(

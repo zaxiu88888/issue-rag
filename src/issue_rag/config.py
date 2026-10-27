@@ -8,6 +8,7 @@ than a code change.
 from __future__ import annotations
 
 import dataclasses
+import os
 import pathlib
 from typing import Any
 
@@ -24,6 +25,32 @@ CACHE_DIR = DATA_DIR / "cache"
 RESULTS_DIR = DATA_DIR / "results"
 
 PRESETS_PATH = CONFIG_DIR / "presets.yaml"
+ENV_FILE = PROJECT_ROOT / ".env"
+
+
+def load_env_file(path: pathlib.Path | None = None) -> list[str]:
+    """Load ``KEY=VALUE`` pairs from ``.env`` into ``os.environ``.
+
+    Convenience for the common local setup, where exporting a variable in one
+    shell does not reach the process that actually runs the pipeline. Existing
+    environment variables always win, so this never silently overrides a real
+    deployment configuration. Returns the names that were loaded (never values).
+    """
+    path = path or ENV_FILE
+    if not path.exists():
+        return []
+    loaded: list[str] = []
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        key = key.strip()
+        value = value.strip().strip('"').strip("'")
+        if key and key not in os.environ:
+            os.environ[key] = value
+            loaded.append(key)
+    return loaded
 
 
 @dataclasses.dataclass(frozen=True)

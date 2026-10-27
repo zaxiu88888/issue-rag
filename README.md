@@ -141,9 +141,18 @@ python -m issue_rag.evalset --preset vite --finalize
 # 4. download models (ModelScope, because huggingface.co may be unreachable)
 python -m issue_rag.models
 
+#    ...or skip the download entirely and use an API for generation/judging:
+#    echo "DEEPSEEK_API_KEY=sk-..." >> .env
+
 # 5. run the matrix
 python -m issue_rag.evaluate --preset vite --systems closed_book,bm25,dense,hybrid,hybrid_rerank
+#    with an API instead of local weights:
+#    python -m issue_rag.evaluate --preset vite --provider deepseek
 ```
+
+`--provider` accepts `local`, `deepseek`, `openai`, `siliconflow`, or `ollama`,
+and any other OpenAI-compatible server works via `--endpoint <url>`. Credentials
+are read from `.env` (see `.env.example`).
 
 The rerun of any stage is free: HTTP responses and embeddings are cached on disk.
 
