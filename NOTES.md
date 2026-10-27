@@ -152,3 +152,77 @@ Keep this short. One line per session: what changed, what broke, what you learne
   which makes per-issue comment fetching impossible; the repo-wide comment list
   endpoint returns 100 per request instead. Retrieval-unit and query-mode
   decisions written down above.
+- **S3** — first real run. 29 reviewed items, closed_book 0.138 vs BM25 0.483.
+  Three findings, below.
+- **S4** — pending: dense / hybrid / hybrid+rerank rows, which need the
+  cross-encoder and the embedding model to finish downloading.
+
+---
+
+## What the first run actually showed
+
+These are the three things to bring up in an interview, because they are the
+things you can only learn by running the experiment.
+
+### 1. Retrieval tripled accuracy and *also* doubled fabrication
+
+| | closed-book | BM25 |
+|---|---|---|
+| correct | 3.4% | 31.0% |
+| accuracy | 0.138 | 0.483 |
+| fabricated | 13.8% | 31.0% |
+
+The mechanism: without retrieval the model mostly **admits ignorance** — 7 of 29
+answers said things like "I don't have reliable knowledge of a Vite 8 release".
+Those score `incorrect`, not `fabricated`, because they invent nothing.
+
+With retrieval it has real specifics in front of it — a version, a PR number, a
+file path — and misattributes them. So the failure moves from *vague* to
+*confidently wrong*, which is worse per failure and easy to miss if you only
+report a single accuracy number.
+
+**Why this matters in an interview:** it shows you understand that a RAG system
+has two separable problems — grounding and citation fidelity — and that fixing
+one can make the other more visible. Quoting "accuracy tripled" alone would be
+the naive read; quoting both numbers is the mature one.
+
+### 2. The retrieval metrics in this repo are a broken measurement, and saying so is the point
+
+`recall@5 = 1.000`. That looks like a triumph and means nothing: the query is the
+issue title and every document is prefixed with that same title, so the gold
+document is lexically almost certain to be found.
+
+Leave-one-out (hiding the source issue's own documents) collapses to **0.000**,
+which is the honest signal: each reference answer exists in exactly one thread,
+so there is no second thread to find.
+
+The conclusion is a *design* conclusion, not a number: this eval set has no
+redundancy, so it cannot rank retrievers. To rank retrievers you need questions
+whose answers appear in several threads, or paraphrased queries.
+
+**Why this matters:** anyone can report a 1.0. Reporting that your own metric is
+degenerate, and explaining why, is what distinguishes measurement from marketing.
+
+### 3. A quarter of the retrieval answers are summaries, not answers
+
+9 of 29 BM25 answers were of the form "this is tracked in issue #21827" rather
+than stating the resolution. The prompt forbids exactly that; it only partly
+worked.
+
+That gap — between "the context contains the answer" and "the model states the
+answer" — is a real product problem, and the fix is either an answer-vs-summary
+classifier or a rewrite pass, not a bigger model.
+
+---
+
+## Numbers to have memorised
+
+- 29 eval items, hand-reviewed down from 53 mined candidates
+- 533 issues, 1,097 comments → 3,078 corpus documents
+- closed_book **0.138** vs BM25 **0.483** accuracy
+- on the 28 items closed-book missed: **0.107 → 0.464**
+- fabrication **13.8% → 31.0%**
+- 100% of retrieval answers carry a citation marker
+- 86% of one rejected repo's comment stream was bots (see `docs/DATA_QUALITY.md`)
+
+If an interviewer asks "what did you actually learn?", the answer is finding #1.
