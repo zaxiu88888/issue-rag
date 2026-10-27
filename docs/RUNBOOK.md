@@ -107,6 +107,42 @@ Sizes and what each unlocks:
 You can produce the **entire retrieval table** with only the first model. Do that
 first: it is the part of the results that does not depend on the generator.
 
+### If the download will not finish: use an endpoint instead
+
+Measured on the machine this was built on (worth checking before assuming your
+network is fine):
+
+| source | throughput |
+|---|---|
+| `download.pytorch.org` | 0.19 MB/s |
+| `mirrors.aliyun.com` (pytorch-wheels) | 0.08 MB/s |
+| `huggingface.co` | unreachable |
+| `hf-mirror.com` | unreachable |
+| `www.modelscope.cn` | reachable |
+| PyPI | usable |
+
+At 0.19 MB/s the 2.5 GB CUDA torch wheel is a 3.6-hour download, and the 6.2 GB
+generator is longer still. A transfer that stalls mid-file looks identical to a
+slow one — if the byte count stops moving for minutes, it has stalled, and
+retrying with `Range` requests resumes rather than restarts.
+
+**The pragmatic escape hatch** is to skip local weights entirely:
+
+```bash
+python -m issue_rag.evaluate --preset vite \
+  --endpoint https://api.deepseek.com/v1 --model deepseek-chat \
+  --systems closed_book,bm25,hybrid_rerank
+```
+
+Any OpenAI-compatible server works (`--endpoint`), so the generator becomes a
+network call instead of a 6 GB download. You lose the "runs with no API key"
+selling point; you keep the measurement, which is the part that matters. Say
+which one you used in the README — reproducibility claim and all that.
+
+The embedding model (`bge-base-en-v1.5`, 440 MB) is still needed for the dense
+and hybrid rows and has no API substitute in this codebase, so it is the one
+download worth spending a night on.
+
 ---
 
 ## 4. Run the experiments

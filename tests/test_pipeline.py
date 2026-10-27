@@ -220,3 +220,64 @@ def test_parse_json_object_single_quotes():
 def test_parse_json_object_returns_none_on_garbage():
     assert parse_json_object("no json at all") is None
     assert parse_json_object("") is None
+
+
+# ------------------------------------------------------------ harvest helpers
+
+
+def test_issue_number_from_comment_url():
+    from issue_rag.fetch import _issue_number_from_url
+
+    assert _issue_number_from_url("https://api.github.com/repos/vitejs/vite/issues/23889") == 23889
+    assert _issue_number_from_url("https://api.github.com/repos/vitejs/vite/issues/23889/") == 23889
+    assert _issue_number_from_url("https://api.github.com/repos/o/r/issues/notanumber") is None
+    assert _issue_number_from_url(None) is None
+
+
+def test_since_date_is_in_the_past():
+    from issue_rag.fetch import _since_date
+
+    import datetime as dt
+
+    months = 12
+    value = dt.date.fromisoformat(_since_date(months))
+    age_days = (dt.date.today() - value).days
+    assert 350 <= age_days <= 380
+
+
+def test_build_documents_drops_bot_comments_but_keeps_humans():
+    """Bot floods made 84% of one repository's comment sample useless."""
+    from issue_rag.corpus import build_documents
+
+    issues = [_issue(1)]
+    comments = [
+        _comment(10, author="ai-sdk-factory[bot]"),
+        _comment(11, author="sapphi-red", association="MEMBER"),
+    ]
+    kept = list(build_documents(issues, comments, "o/r", drop_bots=True))
+    comment_docs = [d for d in kept if d["kind"] == "issue_comment"]
+    assert len(comment_docs) == 1
+    assert comment_docs[0]["author"] == "sapphi-red"
+
+    kept_all = list(build_documents(issues, comments, "o/r", drop_bots=False))
+    assert len([d for d in kept_all if d["kind"] == "issue_comment"]) == 2
+
+
+def test_build_documents_prefixes_issue_title():
+    """Chunk-level text often loses its subject; the prefix restores it."""
+    from issue_rag.corpus import build_documents
+
+    issues = [_issue(7, title="build fails on Node 18")]
+    comments = [_comment(70, number=7, association="MEMBER")]
+    for doc in build_documents(issues, comments, "o/r"):
+        assert "build fails on Node 18" in doc["text"]
+
+
+def test_build_documents_ignores_comments_for_unknown_issues():
+    """Comments from the repo-wide feed often belong to issues not harvested."""
+    from issue_rag.corpus import build_documents
+
+    issues = [_issue(1)]
+    comments = [_comment(99, number=424242)]
+    docs = [d for d in build_documents(issues, comments, "o/r") if d["kind"] == "issue_comment"]
+    assert docs == []
