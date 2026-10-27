@@ -39,3 +39,6 @@ Thumbs.db
 .env
 
 pytest-cache-files-*
+
+pytest-of-*
+tests/_envfile_tmp/

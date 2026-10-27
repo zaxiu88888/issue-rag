@@ -11,16 +11,24 @@ below exist purely because of the failures documented there.
 | stage | state |
 |---|---|
 | harvest client (cache, quota, retry, gzip) | done |
-| issue + comment harvest | done for `vite`, needs ~2 more hours of quota for a 100-item eval set |
-| corpus build (chunking, bot filter, title prefix) | done |
-| eval-set mining + human review sheet | done, waiting on harvest volume |
-| retrieval (BM25 / dense / RRF / rerank) | done |
-| generation + judge + results report | done, not yet run (needs weights) |
-| unit tests | 27 passing |
+| issue + comment harvest | done: 533 issues, 1,097 comments for `vite` |
+| corpus build (chunking, bot filter, title prefix) | done: 3,078 documents |
+| eval-set mining + human review sheet | done: 53 candidates → **29 kept** |
+| retrieval (BM25 / dense / RRF / rerank) | done, all four configurations run |
+| generation + judge + results report | done via `--provider deepseek` |
+| unit tests | 37 passing |
 | CI | configured |
 
-Two things are missing and both are waits, not work: **GitHub quota** and
-**model weights**.
+Everything in the results table has been run end to end. What is *not* done is
+the part that needs more of your time rather than more code:
+
+- **29 eval items is small.** The report prints `n` next to every metric for
+  exactly this reason. Reaching 80–120 needs a token (minutes) or another few
+  hours of anonymous quota.
+- **The reranker result needs a second dataset.** hybrid 0.466 → 0.586 is about
+  three items at n=29.
+- **The judge has not been human-verified.** Grade ~30 items yourself before
+  quoting these numbers anywhere public.
 
 ---
 

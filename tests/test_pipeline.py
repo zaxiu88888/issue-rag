@@ -323,19 +323,37 @@ def test_resolve_model_rejects_unknown_provider():
         resolve_model(provider="not-a-provider")
 
 
-def test_load_env_file_does_not_override_existing(tmp_path, monkeypatch):
+def test_load_env_file_does_not_override_existing(monkeypatch):
+    """Deliberately avoids pytest's tmp_path.
+
+    Some sandboxed Windows environments refuse to create files under the pytest
+    temp root (a ``mkdtemp`` directory), which would fail the suite for
+    environmental reasons rather than code reasons. A directory beside the test
+    file is always writable and behaves the same everywhere.
+    """
+    import os
+    import shutil
+
     from issue_rag.config import load_env_file
 
-    env_file = tmp_path / ".env"
-    env_file.write_text('A_NEW_KEY=from-file\nA_SET_KEY=from-file\n# comment\n\nB=2\n', encoding="utf-8")
+    work = Path(__file__).resolve().parent / "_envfile_tmp"
+    if work.exists():
+        shutil.rmtree(work, ignore_errors=True)
+    work.mkdir(parents=True, exist_ok=True)
+    env_file = work / ".env"
+    env_file.write_text(
+        "A_NEW_KEY=from-file\nA_SET_KEY=from-file\n# comment\n\nB=2\n", encoding="utf-8"
+    )
     monkeypatch.delenv("A_NEW_KEY", raising=False)
     monkeypatch.setenv("A_SET_KEY", "from-env")
+    monkeypatch.delenv("B", raising=False)
 
-    loaded = load_env_file(env_file)
+    try:
+        loaded = load_env_file(env_file)
 
-    import os
-
-    assert os.environ["A_NEW_KEY"] == "from-file"
-    assert os.environ["A_SET_KEY"] == "from-env", "existing environment must win"
-    assert os.environ["B"] == "2"
-    assert "A_SET_KEY" not in loaded
+        assert os.environ["A_NEW_KEY"] == "from-file"
+        assert os.environ["A_SET_KEY"] == "from-env", "existing environment must win"
+        assert os.environ["B"] == "2"
+        assert "A_SET_KEY" not in loaded
+    finally:
+        shutil.rmtree(work, ignore_errors=True)

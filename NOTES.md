@@ -154,8 +154,8 @@ Keep this short. One line per session: what changed, what broke, what you learne
   decisions written down above.
 - **S3** — first real run. 29 reviewed items, closed_book 0.138 vs BM25 0.483.
   Three findings, below.
-- **S4** — pending: dense / hybrid / hybrid+rerank rows, which need the
-  cross-encoder and the embedding model to finish downloading.
+- **S4** — completed the ablation: dense 0.448, hybrid 0.466, hybrid+rerank 0.586.
+  The retriever rows are within noise of each other; only the reranker moves.
 
 ---
 
@@ -164,44 +164,49 @@ Keep this short. One line per session: what changed, what broke, what you learne
 These are the three things to bring up in an interview, because they are the
 things you can only learn by running the experiment.
 
-### 1. Retrieval tripled accuracy and *also* doubled fabrication
+### 1. Retrieval quadrupled accuracy and *also* doubled fabrication
 
-| | closed-book | BM25 |
-|---|---|---|
-| correct | 3.4% | 31.0% |
-| accuracy | 0.138 | 0.483 |
-| fabricated | 13.8% | 31.0% |
+| | closed-book | BM25 | hybrid + rerank |
+|---|---|---|---|
+| correct | 3.4% | 31.0% | 44.8% |
+| accuracy | 0.138 | 0.483 | 0.586 |
+| fabricated | 13.8% | 31.0% | 31.0% |
 
-The mechanism: without retrieval the model mostly **admits ignorance** — 7 of 29
-answers said things like "I don't have reliable knowledge of a Vite 8 release".
-Those score `incorrect`, not `fabricated`, because they invent nothing.
+The mechanism: without retrieval the model mostly **admits ignorance** — several
+answers said "I don't have reliable knowledge of a Vite 8 release". Those score
+`incorrect`, not `fabricated`, because they invent nothing.
 
 With retrieval it has real specifics in front of it — a version, a PR number, a
 file path — and misattributes them. So the failure moves from *vague* to
 *confidently wrong*, which is worse per failure and easy to miss if you only
-report a single accuracy number.
+report one accuracy number.
 
 **Why this matters in an interview:** it shows you understand that a RAG system
 has two separable problems — grounding and citation fidelity — and that fixing
-one can make the other more visible. Quoting "accuracy tripled" alone would be
+one can make the other more visible. Quoting "accuracy quadrupled" alone would be
 the naive read; quoting both numbers is the mature one.
 
-### 2. The retrieval metrics in this repo are a broken measurement, and saying so is the point
+### 2. The retriever comparison is noise, and saying so is the point
 
-`recall@5 = 1.000`. That looks like a triumph and means nothing: the query is the
-issue title and every document is prefixed with that same title, so the gold
-document is lexically almost certain to be found.
+BM25 0.483, dense 0.448, hybrid 0.466. At n=29 that spread is about one item —
+nothing. There is a mechanical reason, and it is the real finding:
 
-Leave-one-out (hiding the source issue's own documents) collapses to **0.000**,
-which is the honest signal: each reference answer exists in exactly one thread,
-so there is no second thread to find.
+`recall@5 = 1.000` and `MRR = 1.000` for **every** retriever, because the query is
+the issue title and every document is prefixed with that title. All four
+configurations find the gold document at rank 1, so they can only differ in what
+the *other* four excerpts are. The ablation is not measuring retrieval ability.
 
-The conclusion is a *design* conclusion, not a number: this eval set has no
-redundancy, so it cannot rank retrievers. To rank retrievers you need questions
-whose answers appear in several threads, or paraphrased queries.
+Leave-one-out (hiding the source issue's own documents) collapses to 0.000,
+confirming each answer lives in exactly one thread.
+
+Reranking is the one row that moves (0.466 → 0.586, about three items) and the
+mechanism is coherent — first stage picks the thread, the cross-encoder picks the
+supporting excerpts — but at n=29 it is suggestive, not established.
 
 **Why this matters:** anyone can report a 1.0. Reporting that your own metric is
-degenerate, and explaining why, is what distinguishes measurement from marketing.
+degenerate, explaining the construct, and naming the fix (questions whose answers
+appear in several threads, or paraphrased queries) is what separates measurement
+from marketing.
 
 ### 3. A quarter of the retrieval answers are summaries, not answers
 
@@ -219,10 +224,14 @@ classifier or a rewrite pass, not a bigger model.
 
 - 29 eval items, hand-reviewed down from 53 mined candidates
 - 533 issues, 1,097 comments → 3,078 corpus documents
-- closed_book **0.138** vs BM25 **0.483** accuracy
-- on the 28 items closed-book missed: **0.107 → 0.464**
+- closed_book **0.138** → BM25 **0.483** → hybrid+rerank **0.586** accuracy
+- `correct` **3.4% → 44.8%**
+- on the 28 items closed-book missed: **0.107 → 0.571**
 - fabrication **13.8% → 31.0%**
-- 100% of retrieval answers carry a citation marker
+- BM25 0.483 / dense 0.448 / hybrid 0.466 — within noise of each other
+- 100% of retrieval answers carry a citation marker, yet ~25% still summarise the
+  thread instead of answering
 - 86% of one rejected repo's comment stream was bots (see `docs/DATA_QUALITY.md`)
 
-If an interviewer asks "what did you actually learn?", the answer is finding #1.
+If an interviewer asks "what did you actually learn?", the answer is finding #1
+and finding #2 — the fabrication inversion and the degenerate metric.

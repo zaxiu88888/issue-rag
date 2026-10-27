@@ -26,14 +26,14 @@ plausible API name, and a confident tone.
 That failure mode is measurable, and it is the thing this project measures.
 Measured on 29 hand-reviewed items against `vitejs/vite`:
 
-| | closed-book | with retrieval (BM25) |
+| | closed-book | with retrieval (hybrid + rerank) |
 |---|---|---|
-| scored `correct` | 3.4% | **31.0%** |
-| weighted accuracy | 0.138 | **0.483** |
+| scored `correct` | 3.4% | **44.8%** |
+| weighted accuracy | 0.138 | **0.586** |
 | flagged `fabricated` | 13.8% | 31.0% |
 
-Retrieval roughly triples accuracy. It also *raises* the fabrication rate, which
-is the least obvious result in this repo and is discussed under
+Retrieval more than quadruples accuracy. It also *raises* the fabrication rate,
+which is the least obvious result in this repo and is discussed under
 [Results](#results).
 
 ---
@@ -170,77 +170,87 @@ _Produced by `python -m issue_rag.evaluate`. Regenerate with the command above;
 numbers are not hand-edited._
 
 <!-- RESULTS:BEGIN -->
-Setup: 29 eval items, generator and judge `deepseek-chat`, 5 retrieved excerpts,
-`vitejs/vite` corpus of 3,078 documents built from 533 issues and 1,097 comments.
+Setup: 29 hand-reviewed items, generator and judge `deepseek-chat`, 5 retrieved
+excerpts, `vitejs/vite` corpus of 3,078 documents built from 533 issues and 1,097
+comments. Full machine-readable output in `data/results/`.
 
 ### Answer quality
 
 | system | accuracy | correct | partial | incorrect | fabricated | cited | p50 |
 |---|---|---|---|---|---|---|---|
 | `closed_book` (no retrieval) | 0.138 | 3.4% | 20.7% | 75.9% | 13.8% | 0% | 4.3 s |
-| `bm25` | **0.483** | 31.0% | 34.5% | 34.5% | 31.0% | 100% | 3.8 s |
+| `bm25` | 0.483 | 31.0% | 34.5% | 34.5% | 31.0% | 100% | 3.8 s |
+| `dense` (bge-base-en-v1.5) | 0.448 | 31.0% | 27.6% | 41.4% | 34.5% | 100% | 3.7 s |
+| `hybrid` (RRF) | 0.466 | 31.0% | 31.0% | 37.9% | 27.6% | 100% | 3.7 s |
+| `hybrid + rerank` (bge-reranker-base) | **0.586** | **44.8%** | 27.6% | 27.6% | 31.0% | 100% | 3.9 s |
 
 _accuracy = correct(1.0) + partial(0.5); fabricated = the judge flagged an
 invented version, API, or file path._
 
-**Retrieval roughly triples accuracy** (0.14 → 0.48) and removes three quarters of
-the unanswerable guesses. That is the headline, and it is the number to quote.
+### On the 28 items the closed-book model got wrong
 
-### Where retrieval actually matters (n=28)
+| system | accuracy | correct | incorrect | fabricated |
+|---|---|---|---|---|
+| `closed_book` | 0.107 | 0.0% | 78.6% | 14.3% |
+| `bm25` | 0.464 | 28.6% | 35.7% | 32.1% |
+| `dense` | 0.464 | 32.1% | 39.3% | 35.7% |
+| `hybrid` | 0.464 | 32.1% | 39.3% | 28.6% |
+| `hybrid + rerank` | **0.571** | 42.9% | 28.6% | 32.1% |
 
-Restricted to the items the closed-book model got wrong, i.e. the items where
-retrieval has something to add:
+A subgroup of the same run, not a filtered eval set — the table above still counts
+every item, so the comparison is not rigged by construction.
 
-| system | accuracy | correct | partial | incorrect | fabricated |
-|---|---|---|---|---|---|
-| `closed_book` | 0.107 | 0.0% | 21.4% | 78.6% | 14.3% |
-| `bm25` | **0.464** | 28.6% | 35.7% | 35.7% | 32.1% |
-
-This is a subgroup of the same run, not a filtered eval set — the full table
-above still counts every item, so the comparison is not rigged by construction.
-
-### Retrieval quality — and why this column proves nothing
+### Retrieval quality — and why these numbers cannot rank retrievers
 
 | retriever | recall@5 | recall@5 leave-one-out | MRR | MRR LOO |
 |---|---|---|---|---|
 | `bm25` | 1.000 | 0.000 | 1.000 | 0.000 |
+| `dense` | 1.000 | 0.000 | 1.000 | 0.000 |
+| `hybrid` | 1.000 | 0.000 | 1.000 | 0.000 |
+| `hybrid_rerank` | 1.000 | 0.000 | 1.000 | 0.000 |
 
 **Read this as a broken measurement, not a good one.** The query is the issue
-title and every document is prefixed with that same title, so `recall@5 = 1.0` is
-close to guaranteed by construction. The leave-one-out column removes the source
-issue's own documents and immediately collapses to zero — which is the honest
-signal: for these questions the answer exists in exactly one thread, so there is
-nothing else to retrieve.
+title and every document is prefixed with that same title, so the gold document
+is found at rank 1 by *every* retriever. The leave-one-out column removes the
+source issue's own documents and collapses to zero, which is the honest signal:
+each answer exists in exactly one thread, so there is no second thread to find.
 
-The useful conclusion is a design one, not a numeric one: **this eval set cannot
-distinguish retrievers**, because it has no redundancy. A retrieval benchmark
-needs questions whose answers appear in more than one thread. What the eval set
-*can* measure is end-to-end answer quality, which is why that table is the
-headline.
+The consequence is important for reading the table above: **the four retrieval
+configurations differ only in what the *other* four excerpts are**, not in
+whether the right issue is found. A retrieval benchmark that can rank retrievers
+needs questions whose answers appear in several threads, or paraphrased queries.
 
 <!-- RESULTS:END -->
 
-### Three things worth noticing in those numbers
+### Five things worth noticing in those numbers
 
-**1. Retrieval makes the model more confidently wrong in a new way.**
-Fabrication rises from 13.8% to 31.0%. Without retrieval the model usually says
-it does not know (75.9% incorrect, but mostly by admitting ignorance). With
-retrieval it has plausible specifics in context and misattributes them — a
-version number from a neighbouring excerpt restated as the answer. The
-conclusion is not "retrieval is bad"; it is that grounding and citation accuracy
-are separate problems, and the second one needs its own fix.
+**1. Retrieval quadruples accuracy.** 0.138 → 0.586, and `correct` goes from 3.4%
+to 44.8%. That is the headline and the one number to quote.
 
-**2. A quarter of retrieval answers answer nothing.**
-9 of 29 BM25 answers largely describe the thread ("this is tracked in issue
-#21827") instead of resolving the question. The prompt was tightened mid-session
-to forbid exactly this and it only partly helped. A production system needs an
-answer-vs-summary classifier, or a prompt-engineering pass with this as an
-explicit metric.
+**2. The retriever choice is noise; the reranker is not.** BM25, dense, and hybrid
+land at 0.483 / 0.448 / 0.466 — a spread of about one item at n=29, i.e. nothing.
+Given that every retriever finds the gold issue at rank 1, that is exactly what
+you would expect. Reranking moves hybrid from 0.466 to 0.586 (+0.12, about three
+items), which is the largest gap in the retrieval half and worth **one** more
+dataset before believing it. The plausible mechanism is real, though: the
+first-stage retriever already picks the right thread, so the only lever left is
+which *supporting* excerpts make it into the context, and that is precisely what
+a cross-encoder orders.
 
-**3. One call stalled for 17 minutes.**
-A single generation hung on the network and took 1,031 s. It did not affect the
-verdict, but it distorts percentiles at n=29 (p95 hides it entirely). Timeouts
-and retries around the generator are missing and should exist before any of this
+**3. Retrieval makes the model more confidently wrong.** Fabrication rises from
+13.8% to 27–34%. Without retrieval the model usually admits ignorance ("I don't
+have reliable knowledge of a Vite 8 release") — wrong, but not invented. With
+retrieval it has plausible specifics in context and misattributes them. Grounding
+and citation fidelity are separate problems, and the second one is unsolved here.
+
+**4. About a quarter of retrieval answers summarise instead of answering.**
+Nine of 29 BM25 answers were of the form "this is tracked in issue #21827". The
+prompt forbids exactly that and only partly helped. In a real product this needs
+an answer-vs-summary check, not a bigger model.
+
+**5. One generation call stalled for 17 minutes.** A single request hung and took
+1,031 s. It did not change a verdict, but at n=29 it is invisible in p95 and it
+means the generator has no timeout or retry. That has to exist before any of this
 runs unattended.
 
 
