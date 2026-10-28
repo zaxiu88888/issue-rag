@@ -110,6 +110,10 @@ class LocalChatModel:
         )
 
 
+class GenerationError(RuntimeError):
+    """A generation call failed after retries; the caller should record it."""
+
+
 class OpenAICompatChatModel:
     """Any ``/v1/chat/completions`` endpoint (vLLM, Ollama, LM Studio, OpenAI)."""
 
@@ -119,11 +123,15 @@ class OpenAICompatChatModel:
         model: str,
         api_key: str = "not-needed",
         timeout_s: int = 120,
+        max_attempts: int = 3,
+        retry_backoff_s: float = 2.0,
     ) -> None:
         self.name = model
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
         self.timeout_s = timeout_s
+        self.max_attempts = max_attempts
+        self.retry_backoff_s = retry_backoff_s
     def chat(
         self,
         messages: list[dict[str, str]],
@@ -131,7 +139,34 @@ class OpenAICompatChatModel:
         max_new_tokens: int = 512,
         temperature: float = 0.0,
     ) -> GenerationResult:
+        started = time.time()
+        body = self._post_with_retry(messages, max_new_tokens, temperature)
+        latency = time.time() - started
+        usage = body.get("usage") or {}
+        return GenerationResult(
+            text=(body["choices"][0]["message"]["content"] or "").strip(),
+            prompt_tokens=usage.get("prompt_tokens", 0),
+            output_tokens=usage.get("completion_tokens", 0),
+            latency_s=latency,
+        )
+
+    def _post_with_retry(
+        self,
+        messages: list[dict[str, str]],
+        max_new_tokens: int,
+        temperature: float,
+    ) -> dict[str, Any]:
+        """POST the completion, retrying transient failures.
+
+        A single hung socket once cost 1,031 seconds in the middle of a run.
+        ``urlopen``'s timeout does not cover a connection that stalls mid-body,
+        so this bounds the whole attempt with a wall-clock deadline and retries
+        with exponential backoff. 4xx other than 429 are raised immediately:
+        retrying a bad request just wastes the caller's time and quota.
+        """
+        import http.client
         import json
+        import urllib.error
         import urllib.request
 
         payload = json.dumps(
@@ -142,24 +177,46 @@ class OpenAICompatChatModel:
                 "temperature": temperature,
             }
         ).encode("utf-8")
-        req = urllib.request.Request(
-            f"{self.base_url}/chat/completions",
-            data=payload,
-            headers={
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {self.api_key}",
-            },
-        )
-        started = time.time()
-        with urllib.request.urlopen(req, timeout=self.timeout_s) as resp:
-            body = json.loads(resp.read())
-        latency = time.time() - started
-        usage = body.get("usage") or {}
-        return GenerationResult(
-            text=(body["choices"][0]["message"]["content"] or "").strip(),
-            prompt_tokens=usage.get("prompt_tokens", 0),
-            output_tokens=usage.get("completion_tokens", 0),
-            latency_s=latency,
+
+        last_error: Exception | None = None
+        for attempt in range(1, self.max_attempts + 1):
+            req = urllib.request.Request(
+                f"{self.base_url}/chat/completions",
+                data=payload,
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {self.api_key}",
+                },
+            )
+            try:
+                with urllib.request.urlopen(req, timeout=self.timeout_s) as resp:
+                    return json.loads(resp.read())
+            except urllib.error.HTTPError as exc:
+                if exc.code in (400, 401, 403, 404, 422):
+                    detail = ""
+                    try:
+                        detail = exc.read().decode("utf-8", "replace")[:300]
+                    except Exception:  # noqa: BLE001 - diagnostics only
+                        pass
+                    raise GenerationError(
+                        f"HTTP {exc.code} from {self.base_url}: {detail}"
+                    ) from exc
+                last_error = exc
+            except (
+                urllib.error.URLError,
+                http.client.HTTPException,
+                ConnectionError,
+                TimeoutError,
+                OSError,
+            ) as exc:
+                last_error = exc
+
+            if attempt < self.max_attempts:
+                backoff = self.retry_backoff_s * (2 ** (attempt - 1))
+                time.sleep(backoff)
+
+        raise GenerationError(
+            f"generation failed after {self.max_attempts} attempts: {last_error}"
         )
 
 

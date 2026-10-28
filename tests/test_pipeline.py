@@ -357,3 +357,133 @@ def test_load_env_file_does_not_override_existing(monkeypatch):
         assert "A_SET_KEY" not in loaded
     finally:
         shutil.rmtree(work, ignore_errors=True)
+
+
+# ------------------------------------------------------- generator resilience
+
+
+def _fake_completion() -> bytes:
+    import json
+
+    return json.dumps(
+        {
+            "choices": [{"message": {"content": "the answer"}}],
+            "usage": {"prompt_tokens": 11, "completion_tokens": 4},
+        }
+    ).encode("utf-8")
+
+
+class _FakeResponse:
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def read(self) -> bytes:
+        return _fake_completion()
+
+
+def test_openai_compat_retries_transient_failures(monkeypatch):
+    """A single hung socket once cost 1,031 seconds; retries must absorb blips."""
+    import urllib.error
+    import urllib.request
+
+    from issue_rag.generate import OpenAICompatChatModel
+
+    calls = {"n": 0}
+
+    def fake_urlopen(req, timeout=None):
+        calls["n"] += 1
+        if calls["n"] < 3:
+            raise urllib.error.URLError("transient blip")
+        return _FakeResponse()
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    model = OpenAICompatChatModel(
+        "http://example.invalid/v1",
+        "m",
+        api_key="k",
+        max_attempts=3,
+        retry_backoff_s=0.0,
+        timeout_s=1,
+    )
+    result = model.chat([{"role": "user", "content": "hi"}])
+    assert result.text == "the answer"
+    assert calls["n"] == 3
+    assert result.prompt_tokens == 11
+
+
+def test_openai_compat_raises_generation_error_after_exhausting_attempts(monkeypatch):
+    import urllib.error
+    import urllib.request
+
+    from issue_rag.generate import GenerationError, OpenAICompatChatModel
+
+    calls = {"n": 0}
+
+    def always_fail(req, timeout=None):
+        calls["n"] += 1
+        raise urllib.error.URLError("down")
+
+    monkeypatch.setattr(urllib.request, "urlopen", always_fail)
+    model = OpenAICompatChatModel(
+        "http://example.invalid/v1",
+        "m",
+        api_key="k",
+        max_attempts=2,
+        retry_backoff_s=0.0,
+        timeout_s=1,
+    )
+    with pytest.raises(GenerationError):
+        model.chat([{"role": "user", "content": "hi"}])
+    assert calls["n"] == 2
+
+
+def test_openai_compat_does_not_retry_a_bad_request(monkeypatch):
+    """Retrying a 401 just burns the caller's quota; fail fast instead."""
+    import io
+    import urllib.error
+    import urllib.request
+
+    from issue_rag.generate import GenerationError, OpenAICompatChatModel
+
+    calls = {"n": 0}
+
+    def unauthorized(req, timeout=None):
+        calls["n"] += 1
+        raise urllib.error.HTTPError(
+            "http://example.invalid/v1/chat/completions",
+            401,
+            "Unauthorized",
+            {},
+            io.BytesIO(b'{"error":"bad key"}'),
+        )
+
+    monkeypatch.setattr(urllib.request, "urlopen", unauthorized)
+    model = OpenAICompatChatModel(
+        "http://example.invalid/v1",
+        "m",
+        api_key="k",
+        max_attempts=3,
+        retry_backoff_s=0.0,
+        timeout_s=1,
+    )
+    with pytest.raises(GenerationError):
+        model.chat([{"role": "user", "content": "hi"}])
+    assert calls["n"] == 1, "4xx must not be retried"
+
+
+def test_summarise_excludes_errors_from_accuracy_and_reports_them():
+    from issue_rag.evaluate import summarise
+
+    records = [
+        {"verdict": "correct", "score": 1.0, "fabricated": False, "cited": True, "latency_s": 1.0},
+        {"verdict": "incorrect", "score": 0.0, "fabricated": True, "cited": True, "latency_s": 2.0},
+        {"verdict": "error", "score": 0.0, "fabricated": False, "cited": False, "latency_s": 0.5, "error": "boom"},
+    ]
+    row = summarise(records, "demo")
+    assert row["n"] == 2, "errors must not count as evaluated items"
+    assert row["errors"] == 1
+    assert row["error_rate"] == 33.3
+    assert row["accuracy"] == 0.5

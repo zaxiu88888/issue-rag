@@ -31,7 +31,7 @@ from typing import Any
 from .config import RESULTS_DIR, RepoPreset, load_env_file, load_preset
 from .corpus import load_jsonl
 from .evalset import EVALSET_FILE
-from .generate import ChatModel, resolve_model
+from .generate import ChatModel, GenerationError, resolve_model
 from .judge import Judge
 from .retrieval import Corpus, build_retriever
 
@@ -192,14 +192,45 @@ def run_system(
                 system_prompt = CLOSED_BOOK_SYSTEM_PROMPT.format(repo=preset.repo)
                 user_content = item["query"]
 
-            generation = model.chat(
-                [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_content},
-                ],
-                max_new_tokens=args.max_new_tokens,
-            )
-            grade = judge.grade(item["query"], item["reference_answer"], generation.text)
+            try:
+                generation = model.chat(
+                    [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_content},
+                    ],
+                    max_new_tokens=args.max_new_tokens,
+                )
+                grade = judge.grade(
+                    item["query"], item["reference_answer"], generation.text
+                )
+            except GenerationError as exc:
+                # A failed call is not a wrong answer. Record it, keep the run
+                # alive, and let the report show an error rate alongside n --
+                # silently dropping it would quietly improve every metric.
+                record = {
+                    "item_id": item["id"],
+                    "system": system,
+                    "answer": "",
+                    "verdict": "error",
+                    "score": 0.0,
+                    "fabricated": False,
+                    "judge_reason": "",
+                    "cited": False,
+                    "context_doc_ids": [h.doc_id for h in hits],
+                    "context_issues": [h.issue_number for h in hits],
+                    "generated_tokens": 0,
+                    "latency_s": round(time.time() - started, 2),
+                    "wall_s": round(time.time() - started, 2),
+                    "error": str(exc)[:300],
+                }
+                handle.write(json.dumps(record, ensure_ascii=False) + "\n")
+                handle.flush()
+                print(
+                    f"  {position:>3}/{len(items)} {item['id']:<10} "
+                    f"{'ERROR':<9} {time.time() - started:5.1f}s  {str(exc)[:60]!r}"
+                )
+                continue
+
             record = {
                 "item_id": item["id"],
                 "system": system,
@@ -234,9 +265,11 @@ def run_system(
 
 def summarise(records: Any, system: str) -> dict[str, Any]:
     records = list(records)
+    errors = [r for r in records if r.get("error")]
+    records = [r for r in records if not r.get("error")]
     n = len(records)
     if not n:
-        return {"system": system, "n": 0}
+        return {"system": system, "n": 0, "errors": len(errors)}
     verdicts = [r["verdict"] for r in records]
     latencies = sorted(r["latency_s"] for r in records)
 
@@ -246,6 +279,8 @@ def summarise(records: Any, system: str) -> dict[str, Any]:
     return {
         "system": system,
         "n": n,
+        "errors": len(errors),
+        "error_rate": pct(len(errors) / max(len(records) + len(errors), 1)),
         "accuracy": round(statistics.mean(r["score"] for r in records), 4),
         "correct_rate": pct(verdicts.count("correct") / n),
         "partial_rate": pct(verdicts.count("partial") / n),
@@ -281,16 +316,17 @@ def write_report(
 
     lines.append("## Answer quality\n")
     header = (
-        "| system | accuracy | correct | partial | incorrect | fabricated | "
+        "| system | n | errors | accuracy | correct | partial | incorrect | fabricated | "
         "cited | p50 s | p95 s |"
     )
     lines.append(header)
-    lines.append("|---|---|---|---|---|---|---|---|---|")
+    lines.append("|---|---|---|---|---|---|---|---|---|---|---|")
     for row in summaries:
         if not row.get("n"):
             continue
         lines.append(
-            f"| `{row['system']}` | {row['accuracy']:.3f} | {row['correct_rate']}% | "
+            f"| `{row['system']}` | {row['n']} | {row.get('errors', 0)} | "
+            f"{row['accuracy']:.3f} | {row['correct_rate']}% | "
             f"{row['partial_rate']}% | {row['incorrect_rate']}% | "
             f"{row['fabricated_rate']}% | {row['cited_rate']}% | "
             f"{row['latency_p50_s']} | {row['latency_p95_s']} |"
@@ -298,7 +334,8 @@ def write_report(
     lines.append("")
     lines.append(
         "_accuracy = correct(1.0) + partial(0.5) averaged; fabricated = judge "
-        "flagged an invented version/API/path._\n"
+        "flagged an invented version/API/path; failed calls are counted in "
+        "`errors` and excluded from accuracy._\n"
     )
 
     if subgroup:
