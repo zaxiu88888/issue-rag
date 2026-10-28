@@ -159,6 +159,46 @@ Keep this short. One line per session: what changed, what broke, what you learne
 
 ---
 
+## The finding to lead with
+
+**I graded my own results with two different models, and the headline shrank by a
+factor of three.**
+
+The pipeline scored answers with `deepseek-chat`, the same model that wrote them.
+So every answer was re-graded blind by `deepseek-reasoner` against the same
+rubric:
+
+| system | `deepseek-chat` | `deepseek-reasoner` |
+|---|---|---|
+| closed_book | 0.138 | 0.328 |
+| bm25 | 0.464 | 0.429 |
+| dense | 0.429 | 0.357 |
+| hybrid | 0.446 | 0.411 |
+| hybrid + rerank | 0.571 | 0.464 |
+| **gain (closed_book → best)** | **+0.433 (4.1×)** | **+0.137 (1.4×)** |
+
+Two things came out of that:
+
+1. **The ranking is identical under both graders.** `closed_book < dense < hybrid
+   < bm25 < hybrid+rerank`. Every relative claim survives.
+2. **The magnitude is not.** The gain is between 1.4× and 4.1× depending on the
+   grader. Publishing "4×" would mean quoting the flattering end of an interval I
+   measured myself.
+
+Why they disagree, mechanically: agreement is 48% on closed-book answers and 93%
+on hybrid answers. Vague generic advice ("try clearing the cache, check your Node
+version") gets partial credit from one grader and nothing from the other; an
+answer that pairs a correct fix with an invented version number gets full credit
+from one and none from the other.
+
+**Why this is the best thing to lead with in an interview:** it is the difference
+between reporting a metric and understanding it. Anyone can produce a 4×. Very few
+candidates will say their own number is soft, quantify how soft, and then show
+which conclusions survive anyway. Expect the follow-up "so what would you actually
+claim?" — the answer is the interval plus the stable ranking.
+
+---
+
 ## What the first run actually showed
 
 These are the three things to bring up in an interview, because they are the
@@ -224,14 +264,15 @@ classifier or a rewrite pass, not a bigger model.
 
 - 29 eval items, hand-reviewed down from 53 mined candidates
 - 533 issues, 1,097 comments → 3,078 corpus documents
-- closed_book **0.138** → BM25 **0.483** → hybrid+rerank **0.586** accuracy
-- `correct` **3.4% → 44.8%**
+- closed_book **0.138** → BM25 **0.483** → hybrid+rerank **0.586** (in-project judge)
+- **judge substitution: the gain ranges from +0.137 (1.4×) to +0.433 (4.1×)**
+- cross-model agreement: **48% on closed_book, 79–93% on the retrieval systems**
+- the ranking of the five systems is **identical** under both graders
+- `correct` **3.4% → 44.8%**; fabrication **13.8% → 31.0%**
 - on the 28 items closed-book missed: **0.107 → 0.571**
-- fabrication **13.8% → 31.0%**
 - BM25 0.483 / dense 0.448 / hybrid 0.466 — within noise of each other
-- 100% of retrieval answers carry a citation marker, yet ~25% still summarise the
-  thread instead of answering
+- ~25% of retrieval answers summarise the thread instead of answering
 - 86% of one rejected repo's comment stream was bots (see `docs/DATA_QUALITY.md`)
 
-If an interviewer asks "what did you actually learn?", the answer is finding #1
-and finding #2 — the fabrication inversion and the degenerate metric.
+If an interviewer asks "what did you actually learn?", lead with the judge
+sensitivity and close with the stable ranking.

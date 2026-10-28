@@ -304,13 +304,21 @@ def write_report(
     n_items: int,
     subgroup: list[dict[str, Any]] | None = None,
     n_subgroup: int = 0,
-) -> Path:
+) -> Path | None:
+    # A run that produced neither an answer table nor a retrieval table has
+    # nothing to say. Writing anyway would replace a good report with an empty
+    # one, which is what `--retrieval-only --systems closed_book` would do.
+    if not any(row.get("n") for row in summaries) and not retrieval:
+        print("no results to report; leaving the existing results.md untouched")
+        return None
     lines: list[str] = []
     lines.append(f"# Results — {preset.display_name} (`{preset.repo}`)\n")
     lines.append(f"- evaluation items: **{n_items}**")
     generator = getattr(args, "resolved_model", None) or args.model or args.local_model
+    judge_name = getattr(args, "resolved_judge", None) or generator
     lines.append(f"- generator: `{generator}`")
-    lines.append(f"- judge: `{generator}` (same model, greedy decoding)")
+    same = " (same model, greedy decoding)" if judge_name == generator else ""
+    lines.append(f"- judge: `{judge_name}`{same}")
     lines.append(f"- top-k retrieved: {args.top_k}")
     lines.append("")
 
@@ -415,6 +423,30 @@ def build_parser() -> argparse.ArgumentParser:
         default="",
         help="explicit OpenAI-compatible base URL; overrides --provider's URL",
     )
+    parser.add_argument(
+        "--judge-provider",
+        default=None,
+        help="provider for the grader; defaults to --provider (see make_judge)",
+    )
+    parser.add_argument(
+        "--judge-model",
+        default=None,
+        help=(
+            "model used to grade; defaults to the generator. Point this at a "
+            "different family to remove the self-grading circularity"
+        ),
+    )
+    parser.add_argument("--judge-endpoint", default="", help="base URL for the grader")
+    parser.add_argument(
+        "--judge-max-tokens",
+        type=int,
+        default=160,
+        help=(
+            "token budget for the grader. Reasoning models spend most of a small "
+            "budget on their trace and return an EMPTY final message, so raise "
+            "this to ~3000 when --judge-model is a reasoning model"
+        ),
+    )
     parser.add_argument("--retrieval-only", action="store_true")
     return parser
 
@@ -426,6 +458,35 @@ def make_model(args: argparse.Namespace) -> ChatModel:
         model=args.model,
         local_default=args.local_model,
     )
+
+
+def make_judge(args: argparse.Namespace, generator: ChatModel | None) -> Judge:
+    """Build the grader, defaulting to the generator.
+
+    Grading with the same model that generated the answer is circular, and that
+    is the project's most-criticisable weakness. Making the judge a flag turns it
+    into a supported workflow: point ``--judge-model`` at a different family and
+    the circularity is gone at the cost of one more endpoint.
+
+    When the two configurations are identical the generator instance is reused,
+    because loading a local model twice would double the memory for nothing.
+    """
+    judge_provider = args.judge_provider or args.provider
+    same_as_generator = (
+        judge_provider == args.provider
+        and (args.judge_model or "") == (args.model or "")
+        and not args.judge_endpoint
+    )
+    if same_as_generator and generator is not None:
+        judge_model = generator
+    else:
+        judge_model = resolve_model(
+            provider=judge_provider,
+            endpoint=args.judge_endpoint,
+            model=args.judge_model,
+            local_default=args.local_model,
+        )
+    return Judge(judge_model, max_new_tokens=args.judge_max_tokens)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -471,7 +532,10 @@ def main(argv: list[str] | None = None) -> int:
     if not args.retrieval_only:
         model = make_model(args)
         args.resolved_model = model.name
-        judge = Judge(model)
+        judge = make_judge(args, model)
+        args.resolved_judge = judge.model.name
+        if args.resolved_judge != model.name:
+            print(f"judge: {args.resolved_judge} (generator: {model.name})")
         for system in systems:
             summaries.append(
                 run_system(

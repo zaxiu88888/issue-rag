@@ -32,9 +32,15 @@ Measured on 29 hand-reviewed items against `vitejs/vite`:
 | weighted accuracy | 0.138 | **0.586** |
 | flagged `fabricated` | 13.8% | 31.0% |
 
-Retrieval more than quadruples accuracy. It also *raises* the fabrication rate,
-which is the least obvious result in this repo and is discussed under
-[Results](#results).
+Retrieval clearly helps — **but the size of the gain depends on who grades it**,
+so this repo reports an interval rather than one number:
+
+- under the in-project judge: **0.138 → 0.586** (4.1×)
+- under an independent stricter grader: **0.328 → 0.464** (1.4×)
+
+The ranking of the five configurations is identical under both graders; only the
+magnitude moves. Retrieval also *raises* the fabrication rate, which is the least
+obvious result here. Both are discussed under [Results](#results).
 
 ---
 
@@ -187,6 +193,52 @@ comments. Full machine-readable output in `data/results/`.
 _accuracy = correct(1.0) + partial(0.5); fabricated = the judge flagged an
 invented version, API, or file path._
 
+### How much of this is the judge?
+
+The judge above is `deepseek-chat`, the same model that wrote the answers —
+circular. So every answer was re-graded blind by a **different model**,
+`deepseek-reasoner`, against the same rubric:
+
+| system | items | exact agreement | binary agreement |
+|---|---|---|---|
+| `closed_book` | 29 | 48.3% | 48.3% |
+| `bm25` | 28 | 78.6% | 78.6% |
+| `dense` | 28 | 85.7% | 85.7% |
+| `hybrid` | 28 | 92.9% | 96.4% |
+| `hybrid + rerank` | 28 | 82.1% | 82.1% |
+
+Agreement tracks answer quality. When an answer plainly resolves the question,
+both graders agree; when it is vague generic troubleshooting — which is what
+closed-book answers are — they split on the partial/incorrect boundary.
+
+Re-scoring everything with the second grader moves the headline:
+
+| system | `deepseek-chat` | `deepseek-reasoner` |
+|---|---|---|
+| `closed_book` | 0.138 | 0.328 |
+| `bm25` | 0.464 | 0.429 |
+| `dense` | 0.429 | 0.357 |
+| `hybrid` | 0.446 | 0.411 |
+| `hybrid + rerank` | 0.571 | 0.464 |
+| **closed_book → best RAG, gain** | **+0.433 (4.1×)** | **+0.137 (1.4×)** |
+
+**Two conclusions, and the second is the important one.**
+
+1. **The ranking is invariant.** Both graders order the systems identically:
+   `closed_book < dense < hybrid < bm25 < hybrid+rerank`. Every relative claim
+   in this README survives the substitution.
+
+2. **The magnitude is not.** The gain is somewhere between 1.4× and 4.1×
+   depending on who grades. Quoting "4×" alone would be picking the flattering
+   end of an interval this project measured itself. The defensible claim is:
+   *retrieval clearly helps, by roughly **1.4× to 4×**, and the width of that
+   interval is the most interesting result here.*
+
+The mechanism shows up in the disagreements: the stricter grader gives partial
+credit to generic advice (raising closed-book) and withdraws it from answers that
+pair a correct fix with an invented version number (lowering RAG). Neither grader
+is ground truth, which is exactly why an interval is reported instead of a point.
+
 ### On the 28 items the closed-book model got wrong
 
 | system | accuracy | correct | incorrect | fabricated |
@@ -224,8 +276,11 @@ needs questions whose answers appear in several threads, or paraphrased queries.
 
 ### Five things worth noticing in those numbers
 
-**1. Retrieval quadruples accuracy.** 0.138 → 0.586, and `correct` goes from 3.4%
-to 44.8%. That is the headline and the one number to quote.
+**1. Retrieval helps, but by how much depends on who grades.** Under the
+in-project judge the gain is 0.138 → 0.586 (4.1×); under a second, stricter
+grader it is 0.328 → 0.464 (1.4×). The *ordering* of the five systems is
+identical under both. Quote the interval, never one end of it — see
+[How much of this is the judge](#how-much-of-this-is-the-judge).
 
 **2. The retriever choice is noise; the reranker is not.** BM25, dense, and hybrid
 land at 0.483 / 0.448 / 0.466 — a spread of about one item at n=29, i.e. nothing.
@@ -284,9 +339,13 @@ that gap survives a stronger generator.
 
 Stated plainly, because a results table without limitations is marketing.
 
-* **LLM-as-judge.** The judge is the same family of model being evaluated. Human
-  spot checks over ~30 items are part of the workflow and the agreement rate is
-  reported alongside the numbers. Judge scores are a proxy, not ground truth.
+* **LLM-as-judge, and the graders disagree.** Grading is done by a model, and two
+  different models agree on only 48%–93% of items depending on answer quality. A
+  cross-model re-grade is committed (`data/results/*judge_agreement*.json`), the
+  sensitivity range is reported instead of a point estimate, and the ranking is
+  shown to be stable under substitution. What is *missing* is a **human**
+  validation: no human has graded these items, so "agreement with a second model"
+  must not be read as "agreement with the truth".
 * **Mined eval set, not a curated benchmark.** Maintainer replies are occasionally
   incomplete or answer a narrower question than the title suggests. The
   keep/drop review pass exists to cut those, and the sheet is committed so the

@@ -1,0 +1,180 @@
+{
+  "system": "bm25",
+  "judge": "deepseek-chat",
+  "grader": "deepseek-reasoner",
+  "comparable": 28,
+  "grader_errors": 0,
+  "grader_unparsed": 1,
+  "exact_agreement": 22,
+  "binary_agreement": 22,
+  "items": [
+    {
+      "item_id": "q20692",
+      "judge_verdict": "correct",
+      "grader_verdict": "correct",
+      "grader_reason": "The candidate conveys the same resolution as the reference — that persisting mangleCache is now possible if Rolldown supports it, tracked at rolldown/rolldown#10771 — with only extra context about the Vite issue."
+    },
+    {
+      "item_id": "q22750",
+      "judge_verdict": "correct",
+      "grader_verdict": "correct",
+      "grader_reason": "The candidate identifies the same root cause as the reference: a bug in es-module-lexer tracked at guybedford/es-module-lexer#208, with additional harmless context."
+    },
+    {
+      "item_id": "q22631",
+      "judge_verdict": "correct",
+      "grader_verdict": "correct",
+      "grader_reason": "The candidate states the same root cause as the reference—that Vike uses esbuild—and adds contextual thread details without contradicting it."
+    },
+    {
+      "item_id": "q22583",
+      "judge_verdict": "correct",
+      "grader_verdict": "correct",
+      "grader_reason": "The candidate states the same resolution as the reference: the Rolldown issue was fixed in v1.1.2 and included in Vite 8.1.0, so upgrading to Vite 8.1+ is the recommended step."
+    },
+    {
+      "item_id": "q22499",
+      "judge_verdict": "partial",
+      "grader_verdict": "partial",
+      "grader_reason": "Candidate points to Rolldown 1.1.2 but frames it only as a workaround and denies any confirmed fix, missing the reference's key fact that the fix shipped in Rolldown v1.1.2 and Vite v8.1.0."
+    },
+    {
+      "item_id": "q22307",
+      "judge_verdict": "incorrect",
+      "grader_verdict": "incorrect",
+      "grader_reason": "The candidate gives a different root cause (__commonJSMin regression) and invents a pin-to-8.0.9 workaround instead of identifying the circular import and rolldown issue #9161 stated in the reference."
+    },
+    {
+      "item_id": "q22227",
+      "judge_verdict": "incorrect",
+      "grader_verdict": "incorrect",
+      "grader_reason": "The candidate contradicts the reference by calling the pre-bundling output a dev bug and recommending workarounds, while the maintainers say the output is correct and the issue lies in import analysis/build behavior; it also invents issue #22232 and a specific Vite version."
+    },
+    {
+      "item_id": "q22225",
+      "judge_verdict": "incorrect",
+      "grader_verdict": "incorrect",
+      "grader_reason": "The candidate misses the reference's esbuild.supported.destructuring workaround and instead asserts an unverified pin to esbuild 0.27.4 plus a specific PR and Vite 7.3.3 fix."
+    },
+    {
+      "item_id": "q22189",
+      "judge_verdict": "partial",
+      "grader_verdict": "partial",
+      "grader_reason": "Candidate identifies the segfault context and references the PR 22201 preview build but misses the key resolution that the fix is released in Vite 8.0.8, instead claiming no confirmed fix version exists."
+    },
+    {
+      "item_id": "q21884",
+      "judge_verdict": "incorrect",
+      "grader_verdict": "incorrect",
+      "grader_reason": "The reference gives a concrete fix (setting `output.strictExecutionOrder = true` in rolldown's config to ensure the react-refresh preamble loads first), while the candidate claims no fix or root cause is stated, thereby contradicting the reference."
+    },
+    {
+      "item_id": "q21866",
+      "judge_verdict": "correct",
+      "grader_verdict": "correct",
+      "grader_reason": "The candidate gives the same resolution as the reference — Rolldown PR #8899, fixed in Rolldown 1.0.0-rc.13 and Vite v8.0.6 — with only harmless extra bug context."
+    },
+    {
+      "item_id": "q21827",
+      "judge_verdict": "partial",
+      "grader_verdict": "incorrect",
+      "grader_reason": "The candidate invents issue numbers (#21827, #17364) and version numbers (Oxc v0.141.0+, Rolldown v1.2.1+, Vite v8.2.0+) not in the reference, and misattributes the main issue instead of stating the case needs Oxc minifier support in #20282."
+    },
+    {
+      "item_id": "q21955",
+      "judge_verdict": "incorrect",
+      "grader_verdict": "incorrect",
+      "grader_reason": "The candidate invents PR #22832, Vite 8.2.0, and a dist/node/chunks/node.js patch and contradicts the reference's point that fixing the Vite error will not stop output escaping the Bazel sandbox."
+    },
+    {
+      "item_id": "q21162",
+      "judge_verdict": "partial",
+      "grader_verdict": "partial",
+      "grader_reason": "The candidate correctly notes there is no confirmed fix, but it omits the reference's key hypothesis that the react-babel plugin removes the transform hook in configResolved, so it does not identify the likely cause."
+    },
+    {
+      "item_id": "q20867",
+      "judge_verdict": "incorrect",
+      "grader_verdict": "incorrect",
+      "grader_reason": "The candidate contradicts the reference by claiming no root cause or fix is present and invents a downgrade to vite 7.1.2, whereas the reference explains the duplicate-module check, an opt-out flag workaround, and links the real fix issue."
+    },
+    {
+      "item_id": "q20202",
+      "judge_verdict": "partial",
+      "grader_verdict": "incorrect",
+      "grader_reason": "The candidate matches the manualChunks circular-dependency explanation but invents Vite 8 rolldownOptions/strictExecutionOrder and Rollup PR #6087/onlyExplicitManualChunks as fixes not in the reference."
+    },
+    {
+      "item_id": "q19035",
+      "judge_verdict": "correct",
+      "grader_verdict": "correct",
+      "grader_reason": "The candidate matches the reference: lib mode disables minification, and the suggested fix is to enable it while setting comments: 'all' automatically."
+    },
+    {
+      "item_id": "q18811",
+      "judge_verdict": "partial",
+      "grader_verdict": "partial",
+      "grader_reason": "The candidate mentions the escaping discussion and that only & and \" likely need escaping, but omits the reference's key rationale for escaping & and the requirement to generate valid HTML when transformIndexHtml returns an array."
+    },
+    {
+      "item_id": "q15620",
+      "judge_verdict": "partial",
+      "grader_verdict": "partial",
+      "grader_reason": "The candidate includes the correct ssr.noExternal workaround but only addresses the SSR/named-import failure and misses the reference's non-SSR default-import cause and other resolutions."
+    },
+    {
+      "item_id": "q13727",
+      "judge_verdict": "partial",
+      "grader_verdict": "incorrect",
+      "grader_reason": "The candidate claims there is no resolution, while the reference states the issue is fixed in Vite 8 beta by switching from esbuild to Oxc."
+    },
+    {
+      "item_id": "q12969",
+      "judge_verdict": "partial",
+      "grader_verdict": "incorrect",
+      "grader_reason": "The candidate invents an alias-to-moment/moment.js workaround and omits the reference's key cause (antdesign-vue expecting the named export isMoment while moment's jsnext:main default export lacks it), contradicting the reference's conclusion that this is a package expectation mismatch, not a Vite-side fix."
+    },
+    {
+      "item_id": "q12423",
+      "judge_verdict": "partial",
+      "grader_verdict": "partial",
+      "grader_reason": "The candidate identifies the issue and reports relevant discussion, but misses the reference's key resolution/guidance: the issue was closed due to a missing repro, and Vite 8 users may try optimizeDeps.rolldownOptions.output.strictExecutionOrder: true."
+    },
+    {
+      "item_id": "q11657",
+      "judge_verdict": "incorrect",
+      "grader_verdict": "partial",
+      "grader_reason": "Mentions commonjsOptions.include but omits the key requirement to use the real path (e.g. /packages/util/) instead of the symlinked path, and adds an unverified Vite 8+ claim."
+    },
+    {
+      "item_id": "q8412",
+      "judge_verdict": "correct",
+      "grader_verdict": "correct",
+      "grader_reason": "The candidate identifies the same workaround as the reference: an enforce:'post' plugin that modifies each chunk's code in generateBundle to prepend/append the banner/footer."
+    },
+    {
+      "item_id": "q5676",
+      "judge_verdict": "incorrect",
+      "grader_verdict": "incorrect",
+      "grader_reason": "The candidate contradicts the reference by claiming no concrete config is provided and invents a Vite 8 beta fix, whereas the reference gives a specific rollupOptions.external: builtinModules workaround."
+    },
+    {
+      "item_id": "q5189",
+      "judge_verdict": "incorrect",
+      "grader_verdict": "incorrect",
+      "grader_reason": "The candidate denies knowing any fix and omits the reference's key resolution (`output.onlyExplicitManualChunks: true` in Rollup 4.52.0/eligible Vite versions), instead citing an unverified issue #5189."
+    },
+    {
+      "item_id": "q5174",
+      "judge_verdict": "incorrect",
+      "grader_verdict": "partial",
+      "grader_reason": "The candidate identifies the tree-shaking problem but misses the reference's key resolution that the cause is terser and that Oxc, SWC, or esbuild can tree-shake the output."
+    },
+    {
+      "item_id": "q2433",
+      "judge_verdict": "correct",
+      "grader_verdict": "correct",
+      "grader_reason": "The candidate includes the reference resolution—setting NODE_OPTIONS='--max-old-space-size=...' as an env variable—alongside harmless extra workaround detail about sourcemaps."
+    }
+  ]
+}

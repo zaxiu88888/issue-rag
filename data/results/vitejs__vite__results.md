@@ -7,15 +7,15 @@
 
 ## Answer quality
 
-| system | accuracy | correct | partial | incorrect | fabricated | cited | p50 s | p95 s |
-|---|---|---|---|---|---|---|---|---|
-| `closed_book` | 0.138 | 3.4% | 20.7% | 75.9% | 13.8% | 0.0% | 4.31 | 4.89 |
-| `bm25` | 0.483 | 31.0% | 34.5% | 34.5% | 31.0% | 100.0% | 3.76 | 4.45 |
-| `dense` | 0.448 | 31.0% | 27.6% | 41.4% | 34.5% | 100.0% | 3.74 | 4.3 |
-| `hybrid` | 0.466 | 31.0% | 31.0% | 37.9% | 27.6% | 100.0% | 3.68 | 3.97 |
-| `hybrid_rerank` | 0.586 | 44.8% | 27.6% | 27.6% | 31.0% | 100.0% | 3.92 | 4.29 |
+| system | n | errors | accuracy | correct | partial | incorrect | fabricated | cited | p50 s | p95 s |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `closed_book` | 29 | 0 | 0.138 | 3.4% | 20.7% | 75.9% | 13.8% | 0.0% | 4.31 | 4.89 |
+| `bm25` | 29 | 0 | 0.483 | 31.0% | 34.5% | 34.5% | 31.0% | 100.0% | 3.76 | 4.45 |
+| `dense` | 29 | 0 | 0.448 | 31.0% | 27.6% | 41.4% | 34.5% | 100.0% | 3.74 | 4.3 |
+| `hybrid` | 29 | 0 | 0.466 | 31.0% | 31.0% | 37.9% | 27.6% | 100.0% | 3.68 | 3.97 |
+| `hybrid_rerank` | 29 | 0 | 0.586 | 44.8% | 27.6% | 27.6% | 31.0% | 100.0% | 3.92 | 4.29 |
 
-_accuracy = correct(1.0) + partial(0.5) averaged; fabricated = judge flagged an invented version/API/path._
+_accuracy = correct(1.0) + partial(0.5) averaged; fabricated = judge flagged an invented version/API/path; failed calls are counted in `errors` and excluded from accuracy._
 
 ## Where retrieval actually matters (n=28)
 
