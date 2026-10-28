@@ -16,19 +16,25 @@ below exist purely because of the failures documented there.
 | eval-set mining + human review sheet | done: 53 candidates → **29 kept** |
 | retrieval (BM25 / dense / RRF / rerank) | done, all four configurations run |
 | generation + judge + results report | done via `--provider deepseek` |
-| unit tests | 37 passing |
+| generator timeouts and retries | done: 3 attempts with backoff; failures recorded, not hidden |
+| cross-model judge check + sensitivity analysis | done: gain is **1.4×–4.1×**, ranking stable |
+| unit tests | 41 passing |
 | CI | configured |
 
-Everything in the results table has been run end to end. What is *not* done is
-the part that needs more of your time rather than more code:
+Everything in the results table has been run end to end. What is *not* done needs
+a person, not code:
 
-- **29 eval items is small.** The report prints `n` next to every metric for
-  exactly this reason. Reaching 80–120 needs a token (minutes) or another few
-  hours of anonymous quota.
-- **The reranker result needs a second dataset.** hybrid 0.466 → 0.586 is about
-  three items at n=29.
-- **The judge has not been human-verified.** Grade ~30 items yourself before
-  quoting these numbers anywhere public.
+- **29 eval items is small.** Every metric prints `n` for this reason. Reaching
+  80–120 needs a GitHub token (minutes) or several quiet hours of anonymous
+  quota. Note that the anonymous quota is per **IP**, so any other tool on the
+  same network competes for it — that happened during this session and stalled the
+  expansion twice.
+- **No human has graded the items.** The cross-model check shows the ranking
+  survives a grader swap while the magnitude does not; it says nothing about what
+  the correct verdict actually is. One hour of human grading is still the single
+  highest-value work left.
+- **The reranker's edge needs a second dataset.** It is the only retrieval row
+  that moves, and three items is not enough.
 
 ---
 
@@ -179,13 +185,39 @@ python -m issue_rag.evaluate --preset vite --limit 5 --systems closed_book,bm25
 
 ---
 
-## 5. Human-verify the judge (required before publishing)
+## 5. Audit the judge (required before publishing)
 
-The judge is the same model family as the generator. Grade 30 items yourself
-against `reference_answer` and compare with the judge's verdicts in the shard
-files under `data/results/`. Report the agreement rate in the README. If
-agreement is below ~80%, the rubric is too loose — tighten it in
-`judge.py:GRADE_SYSTEM` before believing any of the numbers.
+Grading with the model that generated the answers is circular. Two audits are
+possible and they answer different questions.
+
+**a) Cross-model check — cheap, already done.** Re-grade with a different model:
+
+```bash
+DEEPSEEK_API_KEY=... python - <<'PY'
+# or use the session helper this project was built with
+PY
+python -m issue_rag.evaluate --preset vite --provider deepseek \
+  --judge-model deepseek-reasoner --judge-max-tokens 3000 \
+  --systems closed_book,hybrid_rerank
+```
+
+Two gotchas, both learned the hard way:
+
+- **Raise `--judge-max-tokens` to ~3000 for a reasoning model.** `deepseek-reasoner`
+  spends a 160-token budget on its reasoning trace and returns an *empty* final
+  message, so every verdict silently parses as `unparsed`.
+- **Report the sensitivity, not just the agreement.** Swapping the grader in this
+  project moved the head-line gain from 4.1× to 1.4× while leaving the ranking of
+  the five systems unchanged. An agreement number alone would have hidden that.
+
+**b) Human review — not yet done, and still the highest-value hour left.** Grade
+30 items yourself against `reference_answer` using the shards under
+`data/results/`, then report agreement. Until that exists, the README must say
+"cross-model check", never "human validation".
+
+If either audit shows agreement below ~80% on the *binary* question (usable vs
+not), tighten `judge.py:GRADE_SYSTEM` — the partial/incorrect boundary is where
+both graders disagree, so define it more literally before collecting more data.
 
 ---
 
