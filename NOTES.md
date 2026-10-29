@@ -217,6 +217,42 @@ the next step and it is not done — 30 items, one hour. Say it before they ask.
 
 ---
 
+## The sequel: I made the grader more reproducible and it got worse
+
+Having measured that the grader was noisy (0.07 floor), the obvious next move was
+to remove the noise. The noise lived on the partial/incorrect boundary, so I took
+that decision away from the model: it now answers four factual sub-questions and
+**code** maps those answers to a verdict. Same questions, deterministic mapping,
+nothing left to drift.
+
+It worked, in the sense that agreement rose from 82.8% to 93.1%. It also destroyed
+both scores — closed_book 0.336 → 0.034, reranked 0.517 → 0.259 — because one of
+the four checks, `wrong_specific`, was defined as "names any version, issue, file
+path, config key or API symbol absent from the reference". A retrieval answer
+legitimately quotes details from *other* excerpts, so 93–97% of answers were
+flagged as fabricating.
+
+Narrowing that check to version and issue numbers that actually conflict with the
+reference fixed it:
+
+| rubric | closed_book | reranked | run-to-run Δ (reranked) | exact agreement |
+|---|---|---|---|---|
+| holistic (original) | 0.336 | 0.517 | 0.069 | 82.8% |
+| four checks, broad | 0.034 | 0.259 | 0.069 | **93.1%** |
+| four checks, narrow | 0.287 | **0.562** | **0.018** | 82.1% |
+
+**The lesson is the interview answer.** "Better" for a grader is not agreement.
+It is all three of: run-to-run difference on the number you report, the level
+itself, and which sub-answer fired. The broad rubric won on the first and lost on
+the other two, and a candidate who only tracked agreement would have shipped it.
+
+Note the last row honestly: the narrow rubric does **not** improve per-item
+agreement (82.1% vs 82.8%). It improves the *net* shift between runs — errors
+cancel instead of biasing the aggregate. Since every published number is an
+aggregate, that is the variance that mattered.
+
+---
+
 ## What the first run actually showed
 
 These are the three things to bring up in an interview, because they are the
