@@ -208,6 +208,11 @@ shipped rubric that claim does not survive — see
 Three separate questions, answered by three separate comparisons. All runs reuse
 the *same stored answers* (`evaluate --regrade`), so only the grader varies.
 
+_Every figure in this section is **paired**: it uses only the items that have a
+usable verdict in both arms, so it can differ from the full tables above by a
+hundredth or two. The gain line therefore reads +0.310 here and +0.327 above; both
+are computed from the same shards, over a slightly different item set._
+
 **a) Does the rubric matter?** Same model, same answers, rubric ① vs ③:
 
 | system | rubric ① | rubric ③ | delta |
