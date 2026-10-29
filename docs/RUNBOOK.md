@@ -17,8 +17,9 @@ below exist purely because of the failures documented there.
 | retrieval (BM25 / dense / RRF / rerank) | done, all four configurations run |
 | generation + judge + results report | done via `--provider deepseek` |
 | generator timeouts and retries | done: 3 attempts with backoff; failures recorded, not hidden |
-| cross-model judge check + sensitivity analysis | done: gain is **1.4×–4.1×**, ranking stable |
-| unit tests | 41 passing |
+| cross-model judge check + sensitivity analysis | done: gain is **1.9×–2.6×**, ranking stable |
+| blind human review | **done**: 30 pairs, 56.7% exact, κ=0.607 |
+| unit tests | 64 passing |
 | CI | configured |
 
 Everything in the results table has been run end to end. What is *not* done needs
@@ -29,10 +30,11 @@ a person, not code:
   quota. Note that the anonymous quota is per **IP**, so any other tool on the
   same network competes for it — that happened during this session and stalled the
   expansion twice.
-- **No human has graded the items.** The cross-model check shows the ranking
-  survives a grader swap while the magnitude does not; it says nothing about what
-  the correct verdict actually is. One hour of human grading is still the single
-  highest-value work left.
+- **Human review coverage, not absence.** A blind review of 30 pairs is done
+  (56.7% exact, κ=0.607) and it shows the judge understating the gain. What it does
+  not show is a precise estimate: one reviewer, 15 items per system, one sitting.
+  More reviewers and more items would tighten it — that is now a sampling question,
+  which is the same bottleneck as the eval-set size.
 - **The reranker's edge needs a second dataset.** It is the only retrieval row
   that moves, and three items is not enough.
 
@@ -243,9 +245,11 @@ Three gotchas, all learned the hard way:
   the honest report says "unresolved". Only the extremes (closed-book worst, the
   reranked system best) survive all three runs.
 
-**b) Human review — not yet done, and still the highest-value hour left.** This is
-the only step that measures whether the grader is *right* rather than merely
-*reproducible*, and it is the one thing no amount of code can substitute for.
+**b) Human review — done once, worth repeating on a larger sample.** This is the
+only step that measures whether the grader is *right* rather than merely
+*reproducible*. The first pass is committed: 30 pairs, 56.7% exact agreement,
+quadratic-weighted κ=0.607, and a consistent directional bias (the judge is lenient
+on vague advice by 0.167 and strict on retrieval answers by 0.100).
 
 ```bash
 make human-queue      # sample 30 graded answers (deterministic, seeded)

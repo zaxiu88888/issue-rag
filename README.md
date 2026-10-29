@@ -37,6 +37,13 @@ this repo reports an interval rather than one number:
 
 - under the in-project judge: **0.196 → 0.518** (2.6×)
 - under an independent stricter grader: **0.286 → 0.554** (1.9×)
+- under a blind **human** review of 30 answers: **0.100 → 0.567**
+
+The human review is the interesting one: it agrees with the judge on 56.7% of
+verdicts (κ=0.607) but disagrees in a consistent direction — the judge gives vague
+advice more credit than a person does, and good retrieval answers less. So the
+machine-measured gains here are **conservative**, which is the opposite of the usual
+worry about LLM judges.
 
 Two things are deliberately *not* claimed. The four retrieval configurations are
 mutually indistinguishable (0.466–0.517) — including the reranked one, whose lead
@@ -249,19 +256,48 @@ systems. Tightening the rubric cut the run-to-run difference on the reported
 aggregate by roughly 2–7× **and** cut the cross-judge gain interval from
 1.5×–4.2× to **1.9×–2.6×**.
 
+**d) Does a *human* agree?** The only measurement here that is not a model grading
+a model. 30 answers (15 per system) were graded blind through a local review page:
+the reviewer saw the question, the reference and the candidate, but never the
+judge's verdict and never which system produced the answer.
+
+| metric | value |
+|---|---|
+| reviewed pairs | 30 |
+| exact agreement | **56.7%** |
+| usable-vs-not agreement | **66.7%** |
+| quadratic-weighted kappa | **0.607** ("substantial") |
+
+| system | n | exact | usable | mean human | mean judge |
+|---|---|---|---|---|---|
+| `closed_book` | 15 | 47% | 53% | **0.100** | 0.267 |
+| `hybrid + rerank` | 15 | 67% | 80% | **0.567** | 0.467 |
+
+The last two columns are the finding. **The judge is lenient on vague advice and
+strict on good answers**: it scores closed-book 0.167 *higher* than the human does
+and the reranked system 0.100 *lower*. So on this sample the human sees a **+0.467**
+gap where the judge sees +0.200 — the machine-measured gain is a *conservative*
+estimate, not an inflated one. That is the opposite direction from the usual worry
+about LLM judges.
+
+Caveats, because one sample is one sample: a single reviewer, 15 per system, one
+sitting. Treat it as validating the instrument's *direction*, not as a precise
+estimate.
+
 ### What survives, and what does not
 
 | claim | verdict |
 |---|---|
-| Retrieval beats closed-book | **holds** — every rubric, every judge, every run |
-| The gain is "4×" | **does not hold** — it is **1.9×–2.6×** under the shipped rubric |
+| Retrieval beats closed-book | **holds** — every rubric, every judge, every run, and the human review |
+| The gain is "4×" | **does not hold** — it is **1.9×–2.6×** by the model judges; the human sample suggests larger |
 | The reranked system is the best retrieval config | **does not hold** — it leads under rubric ① and ties or trails under ③ |
 | Any ordering among `bm25` / `hybrid` / `dense` / `rerank` | **unresolved** — all within 0.05, i.e. inside the noise floor |
+| The judge understates the gain | **supported** — it over-credits vague advice by 0.167 and under-credits retrieval by 0.100 |
 
-The last row is now well supported rather than merely suspected: the four
-retrieval configurations sit within 0.05 of each other, the grader's run-to-run
-noise is ~0.01–0.07, and the retrieval metrics are degenerate (everything finds the
-gold document at rank 1). Three independent lines of evidence say the same thing.
+The ordering row is well supported rather than merely suspected: the four retrieval
+configurations sit within 0.05 of each other, the grader's run-to-run noise is
+~0.01–0.07, and the retrieval metrics are degenerate (everything finds the gold
+document at rank 1). Three independent lines of evidence say the same thing.
 
 ### On the items the closed-book model got wrong
 
@@ -392,15 +428,13 @@ that gap survives a stronger generator.
 
 Stated plainly, because a results table without limitations is marketing.
 
-* **LLM-as-judge, and the grader is noisy as well as debatable.** Swapping the
-  judge moves a system by up to 0.09, the *same* judge run twice moves it by up to
-  0.07, and changing the rubric moved one system by 0.086 while leaving the others
-  at ±0.05. Differences below roughly 0.07 are therefore not interpretable here,
-  which is why the four retrieval configurations are reported as unordered. Every
-  arm is committed under `data/results/` and regenerates with `make regrade` +
-  `make sensitivity`. What is still **missing** is a *human* validation: no human
-  has graded these items, so "agreement with a second model" must not be read as
-  "agreement with the truth".
+* **LLM-as-judge, now with a human check.** Swapping the judge moves a system by up
+  to 0.09, the *same* judge run twice moves it by up to 0.07, and changing the
+  rubric moved one system by 0.086. A blind human review of 30 pairs agrees with the
+  judge on 56.7% of verdicts (quadratic kappa 0.607) and, more usefully, disagrees
+  in a consistent direction: the judge over-credits vague advice by 0.167 and
+  under-credits retrieval by 0.100. The remaining limit is *coverage* — one
+  reviewer, 15 items per system, one sitting — not the absence of a check.
 * **Mined eval set, not a curated benchmark.** Maintainer replies are occasionally
   incomplete or answer a narrower question than the title suggests. The
   keep/drop review pass exists to cut those, and the sheet is committed so the

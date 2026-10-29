@@ -185,6 +185,28 @@ rubric ① vs ③:
 | hybrid | 0.466 | 0.500 | +0.035 |
 | **hybrid + rerank** | **0.586** | **0.500** | **−0.086** |
 
+**d) Does a human agree?** 30 answers graded blind through a local page: the
+reviewer saw question, reference and candidate, never the verdict, never the system.
+
+| metric | value |
+|---|---|
+| exact agreement | 56.7% |
+| usable-vs-not | 66.7% |
+| quadratic-weighted kappa | **0.607** (substantial) |
+
+| system | n | mean human | mean judge |
+|---|---|---|---|
+| closed_book | 15 | **0.100** | 0.267 |
+| hybrid + rerank | 15 | **0.567** | 0.467 |
+
+**This is the answer to "isn't your judge circular?"** — and it points the
+reassuring way: the judge is *lenient* on vague advice (+0.167) and *strict* on real
+answers (−0.100), so the machine-measured gain is a **lower bound**. On the sampled
+items the human sees +0.467 where the judge sees +0.200.
+
+Say the caveat before you are asked: one reviewer, 15 per system, one sitting. It
+validates the direction, not the decimal.
+
 Three conclusions, and only the first is a keeper in its original form:
 
 1. **Holds everywhere:** retrieval beats closed-book. Every rubric, every judge,
@@ -316,6 +338,9 @@ classifier or a rewrite pass, not a bigger model.
 - noise floor: same-judge run-to-run 0.005–0.07; a rubric swap moved one system by
   0.086. Anything under ~0.07 is not a result.
 - **the reranker's lead was withdrawn** — 0.586 under rubric ①, 0.500 under ③
+- **human blind review: 56.7% exact, κ=0.607, and the judge is lenient on vague
+  advice (+0.167) and strict on good answers (−0.100)** — so the machine numbers
+  understate the gain
 - ~25% of retrieval answers summarise the thread instead of answering
 - 86% of one rejected repo's comment stream was bots (see `docs/DATA_QUALITY.md`)
 

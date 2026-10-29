@@ -45,7 +45,7 @@ import textwrap
 from pathlib import Path
 from typing import Any
 
-from .config import RepoPreset, load_preset
+from .config import RESULTS_DIR, RepoPreset, load_preset
 from .corpus import load_jsonl
 from .evaluate import load_shard, shard_path
 
@@ -106,8 +106,18 @@ def build_queue(
     return queue
 
 
+def latest_decisions(records: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    """Key decisions by review id, keeping the last one.
+
+    Appending is how the tool stays resumable, so a reviewer who changes their mind
+    (or double-clicks) leaves two lines for one item. Counting both would double that
+    item's weight, and averaging two different verdicts yields neither.
+    """
+    return {record["review_id"]: record for record in records}
+
+
 def load_decisions(path: Path) -> dict[str, dict[str, Any]]:
-    return {rec["review_id"]: rec for rec in load_jsonl(path)}
+    return latest_decisions(load_jsonl(path))
 
 
 def _wrap(text: str, width: int, indent: str = "    ") -> str:
@@ -242,7 +252,8 @@ def quadratically_weighted_kappa(
 
 
 def score(preset: RepoPreset, decisions_path: Path) -> int:
-    decisions = load_jsonl(decisions_path)
+    raw = load_jsonl(decisions_path)
+    decisions = list(latest_decisions(raw).values())
     if not decisions:
         raise SystemExit(f"no decisions at {decisions_path}; run --review first")
 
@@ -253,10 +264,18 @@ def score(preset: RepoPreset, decisions_path: Path) -> int:
     binary = sum(1 for h, j in zip(human, judge) if (h in USABLE) == (j in USABLE))
     kappa = quadratically_weighted_kappa(human, judge)
 
-    print(f"# Human vs judge — {preset.display_name}\n")
-    print(f"- reviewed items: **{n}**")
-    print(f"- exact agreement: **{exact}/{n} = {100.0 * exact / n:.1f}%**")
-    print(f"- usable-vs-not agreement: **{binary}/{n} = {100.0 * binary / n:.1f}%**")
+    lines: list[str] = []
+    lines.append(f"# Human vs judge — {preset.display_name}\n")
+    lines.append(f"- reviewed items: **{n}**")
+    if len(raw) > n:
+        lines.append(
+            f"- _{len(raw) - n} duplicate decision line(s) collapsed to the latest "
+            "per item_"
+        )
+    lines.append(f"- exact agreement: **{exact}/{n} = {100.0 * exact / n:.1f}%**")
+    lines.append(
+        f"- usable-vs-not agreement: **{binary}/{n} = {100.0 * binary / n:.1f}%**"
+    )
     if kappa is not None:
         interpretation = (
             "poor" if kappa < 0.20 else
@@ -265,43 +284,61 @@ def score(preset: RepoPreset, decisions_path: Path) -> int:
             "substantial" if kappa < 0.80 else
             "almost perfect"
         )
-        print(f"- quadratic-weighted kappa: **{kappa:.3f}** ({interpretation})")
-    print()
+        lines.append(f"- quadratic-weighted kappa: **{kappa:.3f}** ({interpretation})")
+    lines.append("")
+    lines.append(
+        "_This is the only measurement in the project that is not a model grading a\n"
+        "model. It is one reviewer over one sample: treat it as a validation of the\n"
+        "instrument's direction, not as a precise estimate._\n"
+    )
 
     per_system: dict[str, list[tuple[str, str]]] = {}
     for rec in decisions:
         per_system.setdefault(rec["system"], []).append(
             (rec["human_verdict"], rec["judge_verdict"])
         )
-    print("| system | n | exact | usable | mean human | mean judge |")
-    print("|---|---|---|---|---|---|")
+    lines.append("| system | n | exact | usable | mean human | mean judge |")
+    lines.append("|---|---|---|---|---|---|")
     for system, pairs in sorted(per_system.items()):
         count = len(pairs)
         system_exact = sum(1 for h, j in pairs if h == j)
         system_usable = sum(1 for h, j in pairs if (h in USABLE) == (j in USABLE))
-        print(
+        lines.append(
             f"| `{system}` | {count} | {100.0 * system_exact / count:.0f}% | "
             f"{100.0 * system_usable / count:.0f}% | "
             f"{sum(SCORES[h] for h, _ in pairs) / count:.3f} | "
             f"{sum(SCORES[j] for _, j in pairs) / count:.3f} |"
         )
+    lines.append("")
+    lines.append(
+        "_`mean human` vs `mean judge` is the bias that matters: if the human scores\n"
+        "closed-book lower and retrieval higher, the judge is understating the gap._\n"
+    )
 
     disagreements = [
         rec for rec in decisions if rec["human_verdict"] != rec["judge_verdict"]
     ]
-    print(f"\n## Disagreements ({len(disagreements)})\n")
+    lines.append(f"## Disagreements ({len(disagreements)})\n")
     for rec in disagreements:
         note = f" — {rec['human_note']}" if rec.get("human_note") else ""
-        print(
-            f"- `{rec['item_id']}` human **{rec['human_verdict']}**, "
+        # review_id, not item_id: the same question was reviewed under both
+        # systems, so item_id alone would look like duplicates.
+        lines.append(
+            f"- `{rec['review_id']}` human **{rec['human_verdict']}**, "
             f"judge **{rec['judge_verdict']}**{note}"
         )
     if not disagreements:
-        print("- none")
+        lines.append("- none")
 
+    report = "\n".join(lines) + "\n"
+    print(report)
+    out = RESULTS_DIR / f"{preset.slug}__human_review.md"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(report, encoding="utf-8")
+    print(f"-> {out}")
     print(
-        "\nPaste the three summary lines into README's Limitations, and keep this "
-        "file committed: it is the only human-graded evidence the project has."
+        "\nQuote the three summary lines in README's Limitations, and commit "
+        "human_review.jsonl: it is the only human-graded evidence the project has."
     )
     return 0
 
