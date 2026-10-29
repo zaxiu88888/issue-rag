@@ -777,3 +777,45 @@ def test_weighted_kappa_handles_empty_input():
     from issue_rag.human_review import quadratically_weighted_kappa
 
     assert quadratically_weighted_kappa([], []) is None
+
+
+def test_review_page_cannot_leak_the_judge_verdict():
+    """The embedded JSON must carry no per-item verdict, checks, or system name.
+
+    A string search for "incorrect" is useless here: the page legitimately contains
+    all three verdict words as the reviewer's own option values. What matters is
+    that no queue entry carries the judge's answer.
+    """
+    import re
+
+    from issue_rag.human_review import _page_for
+
+    page = _page_for([_review_entry()])
+    match = re.search(r"/\*QUEUE_START\*/(.*?)/\*QUEUE_END\*/", page, re.S)
+    assert match, "the page should embed the queue as JSON"
+    entries = json.loads(match.group(1))
+    assert len(entries) == 1
+    allowed = {"key", "item_id", "question", "reference", "candidate"}
+    assert set(entries[0]) == allowed
+    assert not any("judge" in name for name in entries[0])
+    assert "judge_verdict" not in page
+    assert "judge_checks" not in page
+    # review_id embeds the system name ("closed_book:q1"), so the page addresses
+    # entries by index; otherwise the page source reveals who answered.
+    assert "closed_book" not in page, "the system name must not be on the page"
+    assert entries[0]["key"] == 0
+
+
+def test_review_page_contains_the_material_to_judge():
+    import re
+
+    from issue_rag.human_review import _page_for
+
+    page = _page_for([_review_entry(), _review_entry(review_id="b:q2", item_id="q2")])
+    assert "why does the build hang" in page
+    assert "Fixed in vite 8.0.6" in page
+    assert "Try clearing your cache" in page
+    match = re.search(r"/\*QUEUE_START\*/(.*?)/\*QUEUE_END\*/", page, re.S)
+    entries = json.loads(match.group(1))
+    assert len(entries) == 2, "every queued review must be addressable"
+    assert [entry["key"] for entry in entries] == [0, 1]
