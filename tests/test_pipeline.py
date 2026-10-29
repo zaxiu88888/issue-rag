@@ -693,3 +693,87 @@ def test_regrade_refuses_to_write_into_the_arm_it_reads():
     with pytest.raises(SystemExit):
         main(["--preset", "vite", "--regrade", "--regrade-from", "v1holistic",
               "--run-tag", "v1holistic", "--judge-model", "x"])
+
+
+# ------------------------------------------------------------- human review tool
+
+
+def _review_entry(**overrides):
+    base = {
+        "review_id": "closed_book:q1",
+        "item_id": "q1",
+        "system": "closed_book",
+        "question": "why does the build hang",
+        "reference": "Fixed in vite 8.0.6 by upgrading rolldown.",
+        "candidate": "Try clearing your cache and updating Node.",
+        "judge_verdict": "incorrect",
+        "judge_checks": {"generic_advice_only": True},
+    }
+    base.update(overrides)
+    return base
+
+
+def test_render_hides_the_judge_verdict():
+    """A review is only blind if the verdict is not on screen."""
+    from issue_rag.human_review import render
+
+    text = render(_review_entry(), 1, 30, 80)
+    assert "incorrect" not in text
+    assert "judge" not in text.lower()
+
+
+def test_render_hides_which_system_produced_the_answer():
+    """Knowing it came from closed_book biases a reviewer toward harshness."""
+    from issue_rag.human_review import render
+
+    text = render(_review_entry(), 1, 30, 80)
+    assert "closed_book" not in text
+
+
+def test_render_shows_question_reference_and_candidate():
+    from issue_rag.human_review import render
+
+    text = render(_review_entry(), 1, 30, 80)
+    assert "why does the build hang" in text
+    assert "Fixed in vite 8.0.6" in text
+    assert "Try clearing your cache" in text
+    assert "[1/30]" in text
+
+
+def test_weighted_kappa_is_one_under_perfect_agreement():
+    from issue_rag.human_review import quadratically_weighted_kappa
+
+    labels = ["correct", "partial", "incorrect", "correct", "partial"]
+    assert abs(quadratically_weighted_kappa(labels, labels) - 1.0) < 1e-9
+
+
+def test_weighted_kappa_penalises_one_step_less_than_two():
+    """Ordinal scales: correct-vs-partial is a smaller error than correct-vs-incorrect.
+
+    The two comparisons must keep the marginals identical, or kappa compares
+    different chance levels instead of different penalties. Swapping two label
+    positions does that, which is why the judge shown here is a permutation of the
+    human labels rather than a uniform shift.
+    """
+    from issue_rag.human_review import quadratically_weighted_kappa
+
+    human = ["correct", "partial", "incorrect", "correct", "partial", "incorrect"]
+    one_step = ["partial", "correct", "incorrect", "correct", "partial", "incorrect"]
+    two_step = ["incorrect", "partial", "correct", "correct", "partial", "incorrect"]
+    assert quadratically_weighted_kappa(human, one_step) > quadratically_weighted_kappa(
+        human, two_step
+    )
+
+
+def test_weighted_kappa_is_negative_when_agreement_is_worse_than_chance():
+    from issue_rag.human_review import quadratically_weighted_kappa
+
+    human = ["correct"] * 5 + ["incorrect"] * 5
+    judge = ["incorrect"] * 5 + ["correct"] * 5
+    assert quadratically_weighted_kappa(human, judge) < 0
+
+
+def test_weighted_kappa_handles_empty_input():
+    from issue_rag.human_review import quadratically_weighted_kappa
+
+    assert quadratically_weighted_kappa([], []) is None

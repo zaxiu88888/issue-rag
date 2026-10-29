@@ -2,13 +2,15 @@
 # Everything is also runnable directly as `python -m issue_rag.<stage>`.
 
 PRESET ?= vite
+# Items in the human review queue, and the grader used for sensitivity.
+HUMAN_N ?= 30
 # Second grader used by `make regrade` / `make sensitivity`.
 VARIANT ?= reasoner
 VARIANT_MODEL ?= deepseek-reasoner
 JUDGE_TOKENS ?= 3000
 
 .PHONY: help install test harvest corpus evalset review models eval eval-retrieval \
-        regrade sensitivity serve clean
+        regrade sensitivity human-queue human-review human-score serve clean
 
 help:
 	@echo "make install       install the package with model extras"
@@ -22,6 +24,9 @@ help:
 	@echo "make eval-retrieval  retrieval metrics only (no generator needed)"
 	@echo "make regrade       re-grade the stored answers with a second model"
 	@echo "make sensitivity   compare the two graders and report the interval"
+	@echo "make human-queue   sample N graded answers for blind human review"
+	@echo "make human-review  grade them one at a time (blind, resumable)"
+	@echo "make human-score   compare your grades with the judge's"
 	@echo "make serve         serve the demo UI"
 	@echo ""
 	@echo "override with: make <target> PRESET=ollama VARIANT_MODEL=deepseek-reasoner"
@@ -66,6 +71,16 @@ regrade:
 sensitivity:
 	python -m issue_rag.sensitivity --preset $(PRESET) --variant $(VARIANT) \
 		$(if $(BASELINE),--baseline $(BASELINE),)
+
+# Human validation: the one step that cannot be automated.
+human-queue:
+	python -m issue_rag.human_review --preset $(PRESET) --n $(HUMAN_N)
+
+human-review:
+	python -m issue_rag.human_review --preset $(PRESET) --review
+
+human-score:
+	python -m issue_rag.human_review --preset $(PRESET) --score
 
 serve:
 	python -m issue_rag.serve --preset $(PRESET)

@@ -243,10 +243,35 @@ Three gotchas, all learned the hard way:
   the honest report says "unresolved". Only the extremes (closed-book worst, the
   reranked system best) survive all three runs.
 
-**b) Human review — not yet done, and still the highest-value hour left.** Grade
-30 items yourself against `reference_answer` using the shards under
-`data/results/`, then report agreement. Until that exists, the README must say
-"cross-model check", never "human validation".
+**b) Human review — not yet done, and still the highest-value hour left.** This is
+the only step that measures whether the grader is *right* rather than merely
+*reproducible*, and it is the one thing no amount of code can substitute for.
+
+```bash
+make human-queue      # sample 30 graded answers (deterministic, seeded)
+make human-review     # grade them one at a time: c / p / i / s / q
+make human-score      # exact + usable agreement, weighted kappa, disagreements
+```
+
+Three properties make it a valid check rather than a ritual:
+
+- **Blind.** The prompt prints the question, the reference and the candidate — not
+  the judge's verdict, and not which system produced the answer. Knowing an answer
+  came from `closed_book` makes a reviewer harsher.
+- **Balanced.** The default queue is 15 items from `closed_book` and 15 from
+  `hybrid_rerank`: the two ends where graders disagree most and least. Reviewing
+  only one end would report the easiest or the hardest case alone.
+- **Resumable.** Decisions append to `data/processed/<repo>/human_review.jsonl`;
+  `q` saves and exits. Twelve items now and eighteen later is fine.
+
+Budget ~1 minute per item, so 30 items is about half an hour. Grade the candidate
+against the reference only — `correct` when it states the same resolution (wording
+may differ), `partial` when it is on topic but misses the key step, `incorrect` when
+it contradicts, invents a version, or is only generic advice that would fit any
+project.
+
+Record the outcome in the README's Limitations, and commit
+`human_review.jsonl` — it is the only human-graded evidence the project will have.
 
 If either audit shows agreement below ~80% on the *binary* question (usable vs
 not), tighten `judge.py:GRADE_SYSTEM` — the partial/incorrect boundary is where
