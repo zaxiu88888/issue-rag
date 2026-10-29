@@ -1,4 +1,4 @@
-﻿"""Unit tests for the parts that can run with no network, GPU, or model weights.
+"""Unit tests for the parts that can run with no network, GPU, or model weights.
 
 The heavy stages (harvest, embed, generate) are not covered here on purpose:
 they are expensive and flaky to test hermetically. What *is* covered is every
@@ -10,6 +10,7 @@ CI runs exactly this file, which is why it must stay dependency-light.
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -545,3 +546,141 @@ def test_regrade_without_a_run_tag_is_refused():
 
     with pytest.raises(SystemExit):
         main(["--preset", "vite", "--regrade", "--judge-model", "x"])
+
+
+# ------------------------------------------------------- judge: operational rubric
+
+
+class _StubJudgeModel:
+    """Returns a fixed completion; lets us test the judge without a network."""
+
+    name = "stub"
+
+    def __init__(self, payload: str) -> None:
+        self.payload = payload
+
+    def chat(self, messages, *, max_new_tokens=512, temperature=0.0):
+        from issue_rag.generate import GenerationResult
+
+        return GenerationResult(text=self.payload)
+
+
+def _checks(**overrides) -> dict:
+    base = {
+        "states_resolution": False,
+        "generic_advice_only": False,
+        "fabricated_specifics": False,
+        "contradicts": False,
+    }
+    base.update(overrides)
+    return base
+
+
+def test_verdict_mapping_is_pinned():
+    """The mapping is the part that used to drift between runs; pin every row."""
+    from issue_rag.judge import verdict_from_checks
+
+    assert verdict_from_checks(_checks(contradicts=True)) == "incorrect"
+    assert verdict_from_checks(_checks(states_resolution=True)) == "correct"
+    assert (
+        verdict_from_checks(_checks(states_resolution=True, fabricated_specifics=True))
+        == "partial"
+    )
+    assert verdict_from_checks(_checks(generic_advice_only=True)) == "incorrect"
+    assert verdict_from_checks(_checks(fabricated_specifics=True)) == "incorrect"
+    assert verdict_from_checks(_checks()) == "partial"
+
+
+def test_contradiction_dominates_every_other_flag():
+    from issue_rag.judge import verdict_from_checks
+
+    for states in (True, False):
+        for generic in (True, False):
+            for fab in (True, False):
+                checks = _checks(
+                    contradicts=True,
+                    states_resolution=states,
+                    generic_advice_only=generic,
+                    fabricated_specifics=fab,
+                )
+                assert verdict_from_checks(checks) == "incorrect"
+
+
+def test_verdict_mapping_covers_all_sixteen_combinations():
+    import itertools
+
+    from issue_rag.judge import VERDICTS, verdict_from_checks
+
+    for combo in itertools.product([True, False], repeat=4):
+        checks = dict(zip(("states_resolution", "generic_advice_only",
+                           "fabricated_specifics", "contradicts"), combo))
+        assert verdict_from_checks(checks) in VERDICTS
+
+
+def test_extract_checks_rejects_missing_keys():
+    """A missing boolean must not silently default to False and earn credit."""
+    from issue_rag.judge import extract_checks
+
+    assert extract_checks({"states_resolution": True}) is None
+    partial_payload = _checks()
+    del partial_payload["fabricated_specifics"]
+    assert extract_checks(partial_payload) is None
+
+
+def test_extract_checks_accepts_strings_and_ints():
+    from issue_rag.judge import extract_checks
+
+    parsed = {
+        "states_resolution": "true",
+        "generic_advice_only": "false",
+        "fabricated_specifics": 1,
+        "contradicts": 0,
+    }
+    assert extract_checks(parsed) == {
+        "states_resolution": True,
+        "generic_advice_only": False,
+        "fabricated_specifics": True,
+        "contradicts": False,
+    }
+
+
+def test_judge_grades_through_the_mapping_not_the_model():
+    """The model only answers sub-questions; the verdict comes from code."""
+    from issue_rag.judge import Judge
+
+    payload = json.dumps(
+        _checks(states_resolution=True, fabricated_specifics=True)
+        | {"reason": "right fix, invented version"}
+    )
+    grade = Judge(_StubJudgeModel(payload)).grade("q", "ref", "cand")
+    assert grade.verdict == "partial", "fabrication caps a correct fix at partial"
+    assert grade.fabricated is True
+    assert grade.checks["states_resolution"] is True
+
+
+def test_judge_marks_legacy_output_distinctly():
+    """A stale prompt emitting a bare verdict must be visible, not silently equal."""
+    from issue_rag.judge import Judge
+
+    payload = json.dumps({"verdict": "correct", "fabricated": False})
+    grade = Judge(_StubJudgeModel(payload)).grade("q", "ref", "cand")
+    assert grade.verdict == "correct"
+    assert grade.meta.get("legacy_output") is True
+    assert grade.checks == {}
+
+
+def test_judge_returns_unparsed_on_garbage():
+    from issue_rag.judge import Judge
+
+    grade = Judge(_StubJudgeModel("no json here")).grade("q", "ref", "cand")
+    assert grade.verdict == "unparsed"
+    assert grade.score == 0.0
+
+
+def test_judge_empty_candidate_is_incorrect_without_a_call():
+    from issue_rag.judge import Judge
+
+    stub = _StubJudgeModel("should not be used")
+    grade = Judge(stub).grade("q", "ref", "   ")
+    assert grade.verdict == "incorrect"
+    assert grade.raw == ""

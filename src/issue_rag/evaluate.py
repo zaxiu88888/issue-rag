@@ -250,6 +250,10 @@ def run_system(
                 "verdict": grade.verdict,
                 "score": grade.score,
                 "fabricated": grade.fabricated,
+                # The four sub-answers that produced the verdict. Storing them
+                # makes a verdict auditable ("why partial?") instead of opaque,
+                # which is what a human reviewer needs during spot checks.
+                "checks": grade.checks,
                 "judge_reason": grade.reason,
                 "cited": answered_with_citation(generation.text),
                 "context_doc_ids": [h.doc_id for h in hits],
@@ -367,6 +371,7 @@ def regrade_system(
                 "verdict": grade.verdict,
                 "score": grade.score,
                 "fabricated": grade.fabricated,
+                "checks": grade.checks,
                 "judge_reason": grade.reason,
                 "judge_model": judge.model.name,
                 "regraded_from": source.get("judge_model") or "generator",
