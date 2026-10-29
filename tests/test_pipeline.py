@@ -1,4 +1,4 @@
-"""Unit tests for the parts that can run with no network, GPU, or model weights.
+﻿"""Unit tests for the parts that can run with no network, GPU, or model weights.
 
 The heavy stages (harvest, embed, generate) are not covered here on purpose:
 they are expensive and flaky to test hermetically. What *is* covered is every
@@ -487,3 +487,61 @@ def test_summarise_excludes_errors_from_accuracy_and_reports_them():
     assert row["errors"] == 1
     assert row["error_rate"] == 33.3
     assert row["accuracy"] == 0.5
+
+
+# --------------------------------------------------- grader-sensitivity harness
+
+
+def test_shard_path_is_tag_scoped():
+    """Two judges must not share a cache key, or the second run is skipped."""
+    from issue_rag.config import RepoPreset
+    from issue_rag.evaluate import results_stem, shard_path
+
+    preset = RepoPreset(key="vite", repo="vitejs/vite", display_name="Vite")
+    base = shard_path(preset, "bm25")
+    tagged = shard_path(preset, "bm25", "reasoner")
+    assert base.name == "vitejs__vite__bm25.jsonl"
+    assert tagged.name == "vitejs__vite__bm25__reasoner.jsonl"
+    assert results_stem(preset) == "vitejs__vite__results"
+    assert results_stem(preset, "reasoner") == "vitejs__vite__reasoner__results"
+
+
+def test_compare_records_only_counts_items_present_in_both():
+    from issue_rag.sensitivity import compare_records
+
+    baseline = {
+        "a": {"item_id": "a", "verdict": "correct"},
+        "b": {"item_id": "b", "verdict": "incorrect"},
+        "c": {"item_id": "c", "verdict": "error", "error": "boom"},
+    }
+    variant = {
+        "a": {"item_id": "a", "verdict": "correct"},
+        "b": {"item_id": "b", "verdict": "partial"},
+        "d": {"item_id": "d", "verdict": "correct"},
+    }
+    row = compare_records(baseline, variant)
+    assert row["n"] == 2, "errors and one-sided items must be dropped"
+    assert row["baseline_accuracy"] == 0.5
+    assert row["variant_accuracy"] == 0.75
+    assert row["exact_agreement"] == 50.0
+    # incorrect -> partial flips usability, so the BINARY reading disagrees even
+    # though the answer did not get worse -- this is the boundary the two graders
+    # actually fight over.
+    assert row["binary_agreement"] == 50.0
+    assert row["verdict_transitions"] == {"incorrect -> partial": 1}
+
+
+def test_compare_records_reports_no_overlap():
+    from issue_rag.sensitivity import compare_records
+
+    assert compare_records({"a": {"verdict": "correct"}}, {"b": {"verdict": "correct"}}) == {
+        "n": 0
+    }
+
+
+def test_regrade_without_a_run_tag_is_refused():
+    """Appending to the shards it is reading from would corrupt the baseline."""
+    from issue_rag.evaluate import main
+
+    with pytest.raises(SystemExit):
+        main(["--preset", "vite", "--regrade", "--judge-model", "x"])

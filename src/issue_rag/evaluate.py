@@ -124,9 +124,21 @@ def evaluate_retrieval(
 # -------------------------------------------------------------- answer quality
 
 
-def shard_path(preset: RepoPreset, system: str) -> Path:
+def shard_path(preset: RepoPreset, system: str, tag: str = "") -> Path:
+    """Per-(system, run-tag) result shard.
+
+    The tag exists so a second run with a different grader lands beside the first
+    instead of colliding with it. Re-grading the same answers under two judges is
+    what makes the sensitivity analysis apples-to-apples, so the two runs must not
+    share a cache key.
+    """
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-    return RESULTS_DIR / f"{preset.slug}__{system}.jsonl"
+    suffix = f"__{tag}" if tag else ""
+    return RESULTS_DIR / f"{preset.slug}__{system}{suffix}.jsonl"
+
+
+def results_stem(preset: RepoPreset, tag: str = "") -> str:
+    return f"{preset.slug}__{tag}__results" if tag else f"{preset.slug}__results"
 
 
 def load_shard(path: Path) -> dict[str, dict[str, Any]]:
@@ -167,7 +179,7 @@ def run_system(
             device=args.device,
         )
 
-    shard = shard_path(preset, system)
+    shard = shard_path(preset, system, getattr(args, "run_tag", ""))
     done = load_shard(shard)
     valid_ids = {item["id"] for item in items}
     already = len(valid_ids & set(done))
@@ -296,6 +308,83 @@ def summarise(records: Any, system: str) -> dict[str, Any]:
 # --------------------------------------------------------------------- report
 
 
+def regrade_system(
+    system: str,
+    items: list[dict[str, Any]],
+    *,
+    judge: Judge,
+    preset: RepoPreset,
+    args: argparse.Namespace,
+) -> dict[str, Any]:
+    """Re-grade existing answers with a different judge, without re-generating.
+
+    Reusing the stored answers is the whole point: it holds the generator fixed so
+    the only thing that changes between the two runs is who grades. Regenerating
+    would make the comparison confounded by sampling differences and would cost
+    twice as much.
+    """
+    base = load_shard(shard_path(preset, system))
+    target = shard_path(preset, system, args.run_tag)
+    # "unparsed" means the grader emitted no parseable JSON -- usually a reasoning
+    # model whose trace consumed the whole budget. That is a failure, not a
+    # verdict, so it must not be cached as done: a rerun with a larger
+    # --judge-max-tokens should retry it. Re-appending is safe because load_shard
+    # keys by item_id and keeps the last record.
+    done = {
+        iid: rec
+        for iid, rec in load_shard(target).items()
+        if rec.get("verdict") != "unparsed"
+    }
+    print(f"\n[{system}] re-grading with {judge.model.name} (answers reused)")
+
+    with target.open("a", encoding="utf-8") as handle:
+        for position, item in enumerate(items, start=1):
+            if item["id"] in done:
+                continue
+            source = base.get(item["id"])
+            if source is None or source.get("error"):
+                print(f"  {position:>3}/{len(items)} {item['id']:<10} no baseline answer, skipped")
+                continue
+            try:
+                grade = judge.grade(
+                    item["query"], item["reference_answer"], source["answer"]
+                )
+            except GenerationError as exc:
+                record = {
+                    **source,
+                    "verdict": "error",
+                    "score": 0.0,
+                    "error": str(exc)[:300],
+                    "judge_model": judge.model.name,
+                }
+                handle.write(json.dumps(record, ensure_ascii=False) + "\n")
+                handle.flush()
+                print(f"  {position:>3}/{len(items)} {item['id']:<10} ERROR {str(exc)[:50]!r}")
+                continue
+
+            record = {
+                **source,
+                "verdict": grade.verdict,
+                "score": grade.score,
+                "fabricated": grade.fabricated,
+                "judge_reason": grade.reason,
+                "judge_model": judge.model.name,
+                "regraded_from": source.get("judge_model") or "generator",
+            }
+            record.pop("error", None)
+            handle.write(json.dumps(record, ensure_ascii=False) + "\n")
+            handle.flush()
+            print(
+                f"  {position:>3}/{len(items)} {item['id']:<10} "
+                f"{grade.verdict:<9} (was {source.get('verdict')})"
+            )
+
+    valid_ids = {item["id"] for item in items}
+    return summarise(
+        (rec for iid, rec in load_shard(target).items() if iid in valid_ids), system
+    )
+
+
 def write_report(
     preset: RepoPreset,
     summaries: list[dict[str, Any]],
@@ -388,7 +477,7 @@ def write_report(
             "against itself._\n"
         )
 
-    path = RESULTS_DIR / f"{preset.slug}__results.md"
+    path = RESULTS_DIR / f"{results_stem(preset, getattr(args, 'run_tag', ''))}.md"
     path.write_text("\n".join(lines), encoding="utf-8")
     return path
 
@@ -445,6 +534,24 @@ def build_parser() -> argparse.ArgumentParser:
             "token budget for the grader. Reasoning models spend most of a small "
             "budget on their trace and return an EMPTY final message, so raise "
             "this to ~3000 when --judge-model is a reasoning model"
+        ),
+    )
+    parser.add_argument(
+        "--run-tag",
+        default="",
+        help=(
+            "suffix for shard and report filenames, so several runs can coexist. "
+            "Required with --regrade."
+        ),
+    )
+    parser.add_argument(
+        "--regrade",
+        action="store_true",
+        help=(
+            "re-grade the answers already stored in the untagged shards instead "
+            "of generating new ones. Holds the generator fixed and varies only "
+            "the judge, which is what makes a grader-sensitivity comparison "
+            "meaningful. Needs --run-tag and a different --judge-model."
         ),
     )
     parser.add_argument("--retrieval-only", action="store_true")
@@ -512,24 +619,46 @@ def main(argv: list[str] | None = None) -> int:
 
     systems = [s.strip() for s in args.systems.split(",") if s.strip()]
 
-    retrieval: dict[str, dict[str, float]] = {}
-    for system in systems:
-        if system == "closed_book":
-            continue
-        retriever = build_retriever(
-            system,
-            corpus,
-            dense_model=args.dense_model,
-            reranker_model=args.reranker_model,
-            device=args.device,
+    if args.regrade and not args.run_tag:
+        raise SystemExit(
+            "--regrade needs --run-tag, otherwise it would append to (and corrupt) "
+            "the baseline shards it is reading from. Example:\n"
+            "  python -m issue_rag.evaluate --preset vite --regrade \\\n"
+            "    --judge-model deepseek-reasoner --judge-max-tokens 3000 --run-tag reasoner"
         )
-        retrieval[system] = evaluate_retrieval(retriever, items, args.top_k)
-        print(f"[retrieval:{system}] {retrieval[system]}")
+
+    retrieval: dict[str, dict[str, float]] = {}
+    if not args.regrade:
+        for system in systems:
+            if system == "closed_book":
+                continue
+            retriever = build_retriever(
+                system,
+                corpus,
+                dense_model=args.dense_model,
+                reranker_model=args.reranker_model,
+                device=args.device,
+            )
+            retrieval[system] = evaluate_retrieval(retriever, items, args.top_k)
+            print(f"[retrieval:{system}] {retrieval[system]}")
 
     summaries: list[dict[str, Any]] = []
     subgroup: list[dict[str, Any]] = []
     n_subgroup = 0
-    if not args.retrieval_only:
+
+    if args.regrade:
+        # A re-grade run holds the answers fixed and swaps only the judge, so the
+        # two runs are comparable item by item. No retrieval metrics and no
+        # subgroup table: both belong to the run that produced the answers, and
+        # recomputing them here would mix two judges inside one table.
+        judge = make_judge(args, None)
+        args.resolved_judge = judge.model.name
+        args.resolved_model = "reused from the untagged run"
+        for system in systems:
+            summaries.append(
+                regrade_system(system, items, judge=judge, preset=preset, args=args)
+            )
+    elif not args.retrieval_only:
         model = make_model(args)
         args.resolved_model = model.name
         judge = make_judge(args, model)
@@ -573,7 +702,8 @@ def main(argv: list[str] | None = None) -> int:
         preset, summaries, retrieval, args, len(items), subgroup, n_subgroup
     )
     print(f"\n-> {report}")
-    (RESULTS_DIR / f"{preset.slug}__results.json").write_text(
+    stem = results_stem(preset, args.run_tag)
+    (RESULTS_DIR / f"{stem}.json").write_text(
         json.dumps(
             {
                 "summaries": summaries,
@@ -581,6 +711,9 @@ def main(argv: list[str] | None = None) -> int:
                 "n_items": len(items),
                 "n_closed_book_missed": n_subgroup,
                 "subgroup_closed_book_missed": subgroup,
+                "run_tag": args.run_tag,
+                "judge": getattr(args, "resolved_judge", None),
+                "regrade": bool(args.regrade),
             },
             ensure_ascii=False,
             indent=2,

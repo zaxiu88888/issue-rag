@@ -1,0 +1,78 @@
+{
+  "preset": "vitejs/vite",
+  "baseline_judge": "deepseek-chat",
+  "variant_judge": "deepseek-reasoner",
+  "systems": {
+    "closed_book": {
+      "n": 29,
+      "dropped": 2,
+      "baseline_accuracy": 0.1379,
+      "variant_accuracy": 0.3276,
+      "delta": 0.1897,
+      "exact_agreement": 48.3,
+      "binary_agreement": 48.3,
+      "verdict_transitions": {
+        "incorrect -> partial": 13,
+        "partial -> incorrect": 2
+      }
+    },
+    "bm25": {
+      "n": 29,
+      "dropped": 2,
+      "baseline_accuracy": 0.4828,
+      "variant_accuracy": 0.4138,
+      "delta": -0.069,
+      "exact_agreement": 72.4,
+      "binary_agreement": 79.3,
+      "verdict_transitions": {
+        "partial -> incorrect": 3,
+        "correct -> incorrect": 2,
+        "partial -> correct": 2,
+        "incorrect -> partial": 1
+      }
+    },
+    "dense": {
+      "n": 29,
+      "dropped": 0,
+      "baseline_accuracy": 0.4483,
+      "variant_accuracy": 0.3621,
+      "delta": -0.0862,
+      "exact_agreement": 62.1,
+      "binary_agreement": 65.5,
+      "verdict_transitions": {
+        "partial -> incorrect": 4,
+        "incorrect -> partial": 4,
+        "correct -> incorrect": 2,
+        "correct -> partial": 1
+      }
+    },
+    "hybrid": {
+      "n": 29,
+      "dropped": 0,
+      "baseline_accuracy": 0.4655,
+      "variant_accuracy": 0.4655,
+      "delta": 0.0,
+      "exact_agreement": 93.1,
+      "binary_agreement": 96.6,
+      "verdict_transitions": {
+        "incorrect -> partial": 1,
+        "correct -> partial": 1
+      }
+    },
+    "hybrid_rerank": {
+      "n": 29,
+      "dropped": 0,
+      "baseline_accuracy": 0.5862,
+      "variant_accuracy": 0.4828,
+      "delta": -0.1034,
+      "exact_agreement": 86.2,
+      "binary_agreement": 89.7,
+      "verdict_transitions": {
+        "correct -> incorrect": 2,
+        "correct -> partial": 1,
+        "partial -> incorrect": 1
+      }
+    }
+  },
+  "missing": []
+}

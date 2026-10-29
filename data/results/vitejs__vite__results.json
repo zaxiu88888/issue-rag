@@ -180,5 +180,8 @@
       "latency_p50_s": 3.93,
       "latency_p95_s": 4.29
     }
-  ]
+  ],
+  "run_tag": "",
+  "judge": "deepseek-chat",
+  "regrade": false
 }

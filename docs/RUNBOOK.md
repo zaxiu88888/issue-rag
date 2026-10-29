@@ -192,23 +192,39 @@ possible and they answer different questions.
 
 **a) Cross-model check — cheap, already done.** Re-grade with a different model:
 
+**a) Cross-model check — cheap, and part of the pipeline.** The point is to hold
+the generator fixed and vary only the grader, so run it in two steps: the normal
+matrix first, then a re-grade that reuses the stored answers.
+
 ```bash
-DEEPSEEK_API_KEY=... python - <<'PY'
-# or use the session helper this project was built with
-PY
-python -m issue_rag.evaluate --preset vite --provider deepseek \
-  --judge-model deepseek-reasoner --judge-max-tokens 3000 \
-  --systems closed_book,hybrid_rerank
+# 1. baseline: generator and judge are the same model
+make eval
+
+# 2. re-grade the SAME answers with a different model
+make regrade VARIANT=reasoner VARIANT_MODEL=deepseek-reasoner
+
+# 3. compare and print the interval
+make sensitivity VARIANT=reasoner
 ```
 
-Two gotchas, both learned the hard way:
+`--regrade` reads the `answer` field out of the untagged shards and writes new
+tagged shards (`...__bm25__reasoner.jsonl`). It never touches the baseline, and
+it refuses to run without `--run-tag` for exactly that reason. Because the
+answers are byte-identical between the two runs, any score difference is
+attributable to the grader.
+
+Three gotchas, all learned the hard way:
 
 - **Raise `--judge-max-tokens` to ~3000 for a reasoning model.** `deepseek-reasoner`
   spends a 160-token budget on its reasoning trace and returns an *empty* final
-  message, so every verdict silently parses as `unparsed`.
+  message, so every verdict silently parses as `unparsed` and the run looks like a
+  total disagreement.
 - **Report the sensitivity, not just the agreement.** Swapping the grader in this
-  project moved the head-line gain from 4.1× to 1.4× while leaving the ranking of
+  project moved the headline gain from 4.1× to 1.4× while leaving the ranking of
   the five systems unchanged. An agreement number alone would have hidden that.
+- **Agreement rises with answer quality** (48% on closed-book, 79–93% on retrieval
+  systems). A single pooled agreement figure would understate agreement exactly
+  where the numbers matter.
 
 **b) Human review — not yet done, and still the highest-value hour left.** Grade
 30 items yourself against `reference_answer` using the shards under
