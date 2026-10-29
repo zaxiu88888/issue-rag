@@ -1,12 +1,12 @@
 # Grader sensitivity — Vite (`vitejs/vite`)
 
-- baseline judge: `deepseek-chat`
-- variant judge: `deepseek-reasoner`
+- baseline judge: `deepseek-chat [baseline]`
+- variant judge: `deepseek-reasoner [reasoner]`
 - answers are identical in both runs; only the grader differs (`evaluate --regrade`)
 
 ## Accuracy under each grader
 
-| system | n | dropped | `deepseek-chat` | `deepseek-reasoner` | delta |
+| system | n | dropped | `deepseek-chat [baseline]` | `deepseek-reasoner [reasoner]` | delta |
 |---|---|---|---|---|---|
 | `closed_book` | 29 | 2 | 0.138 | 0.328 | +0.190 |
 | `bm25` | 29 | 2 | 0.483 | 0.414 | -0.069 |
@@ -30,13 +30,13 @@ _4 item(s) across all systems were dropped because one side lacked a usable verd
 
 Best retrieval system by baseline accuracy: `hybrid_rerank`.
 
-- gain under `deepseek-chat`: **+0.448** (0.138 -> 0.586)
-- gain under `deepseek-reasoner`: **+0.155** (0.328 -> 0.483)
+- gain under `deepseek-chat [baseline]`: **+0.448** (0.138 -> 0.586)
+- gain under `deepseek-reasoner [reasoner]`: **+0.155** (0.328 -> 0.483)
 
 **Ranking stability**: changed under both graders.
 
-- under `deepseek-chat`: `closed_book < dense < hybrid < bm25 < hybrid_rerank`
-- under `deepseek-reasoner`: `closed_book < dense < bm25 < hybrid < hybrid_rerank`
+- under `deepseek-chat [baseline]`: `closed_book < dense < hybrid < bm25 < hybrid_rerank`
+- under `deepseek-reasoner [reasoner]`: `closed_book < dense < bm25 < hybrid < hybrid_rerank`
 
 `bm25`, `hybrid` change position. Before quoting that as a finding, check the gap: the largest difference among the movers is **0.017**, which at n≈29 is well inside one item. An ordering that flips under a grader swap and whose members are a fraction of an item apart is not a finding — report it as unresolved.
 

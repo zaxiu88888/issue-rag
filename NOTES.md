@@ -161,41 +161,59 @@ Keep this short. One line per session: what changed, what broke, what you learne
 
 ## The finding to lead with
 
-**I graded my own results with two different models, and the headline shrank by a
-factor of three.**
+**I graded my own results three times and found out how much of the headline is
+the grader.**
 
 The pipeline scored answers with `deepseek-chat`, the same model that wrote them.
-So every answer was re-graded blind by `deepseek-reasoner` against the same
-rubric:
+So every answer was re-graded by `deepseek-reasoner` over the same stored answers —
+and then the reasoner was run a second time, to measure its own noise.
 
-| system | `deepseek-chat` | `deepseek-reasoner` |
-|---|---|---|
-| closed_book | 0.138 | 0.328 |
-| bm25 | 0.464 | 0.429 |
-| dense | 0.429 | 0.357 |
-| hybrid | 0.446 | 0.411 |
-| hybrid + rerank | 0.571 | 0.464 |
-| **gain (closed_book → best)** | **+0.433 (4.1×)** | **+0.137 (1.4×)** |
+Two different models, same answers:
 
-Two things came out of that:
+| system | `deepseek-chat` | `deepseek-reasoner` | delta |
+|---|---|---|---|
+| closed_book | 0.138 | 0.328 | **+0.190** |
+| bm25 | 0.483 | 0.414 | −0.069 |
+| dense | 0.448 | 0.362 | −0.086 |
+| hybrid | 0.466 | 0.466 | 0.000 |
+| hybrid + rerank | 0.586 | 0.483 | −0.103 |
+| **gain (closed_book → best)** | **+0.448 (4.2×)** | **+0.155 (1.5×)** | |
 
-1. **The ranking is identical under both graders.** `closed_book < dense < hybrid
-   < bm25 < hybrid+rerank`. Every relative claim survives.
-2. **The magnitude is not.** The gain is between 1.4× and 4.1× depending on the
-   grader. Publishing "4×" would mean quoting the flattering end of an interval I
-   measured myself.
+Same model, twice:
 
-Why they disagree, mechanically: agreement is 48% on closed-book answers and 93%
-on hybrid answers. Vague generic advice ("try clearing the cache, check your Node
-version") gets partial credit from one grader and nothing from the other; an
+| system | run a | run b | delta |
+|---|---|---|---|
+| hybrid + rerank | 0.483 | 0.552 | **+0.069** |
+| dense | 0.339 | 0.375 | +0.036 |
+| hybrid | 0.466 | 0.431 | −0.035 |
+| closed_book | 0.328 | 0.345 | +0.017 |
+| bm25 | 0.414 | 0.397 | −0.017 |
+
+The grader agrees with **itself** on only 71–93% of verdicts. So **~0.07 accuracy
+is noise**, and any gap smaller than that between two systems is not a result.
+
+Three claims come out of this, and only the first two are usable:
+
+1. **Holds in every run:** closed-book is worst, and the reranked system is best.
+2. **Does not hold:** "retrieval quadruples accuracy". It is **1.5×–4.2×**.
+3. **Unresolved:** the ordering of `bm25` / `hybrid` / `dense`. They swap between
+   graders and every pair sits within 0.07 of each other.
+
+Why the graders disagree, mechanically: agreement is 48% on closed-book answers and
+93% on hybrid answers. Vague generic advice ("try clearing the cache, check your
+Node version") gets partial credit from one grader and nothing from the other; an
 answer that pairs a correct fix with an invented version number gets full credit
 from one and none from the other.
 
 **Why this is the best thing to lead with in an interview:** it is the difference
 between reporting a metric and understanding it. Anyone can produce a 4×. Very few
-candidates will say their own number is soft, quantify how soft, and then show
-which conclusions survive anyway. Expect the follow-up "so what would you actually
-claim?" — the answer is the interval plus the stable ranking.
+candidates will say their number is soft, quantify how soft, notice that their own
+measuring instrument is noisy, and then show which conclusions survive anyway.
+Expect the follow-up "so what would you actually claim?" — the answer is: the shape
+of the result and a 1.5×–4.2× interval, nothing more precise.
+
+**Follow-up you should be ready for:** "why not just use a human?" Because that is
+the next step and it is not done — 30 items, one hour. Say it before they ask.
 
 ---
 

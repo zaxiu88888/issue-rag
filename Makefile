@@ -64,7 +64,8 @@ regrade:
 		--systems closed_book,bm25,dense,hybrid,hybrid_rerank
 
 sensitivity:
-	python -m issue_rag.sensitivity --preset $(PRESET) --variant $(VARIANT)
+	python -m issue_rag.sensitivity --preset $(PRESET) --variant $(VARIANT) \
+		$(if $(BASELINE),--baseline $(BASELINE),)
 
 serve:
 	python -m issue_rag.serve --preset $(PRESET)

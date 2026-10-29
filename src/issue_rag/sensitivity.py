@@ -139,18 +139,29 @@ def main(argv: list[str] | None = None) -> int:
 
     base_judge = judge_of(args.baseline)
     variant_judge = judge_of(args.variant)
+    # Include the run tag in the label: when both runs use the same model -- the
+    # self-consistency case -- two identical names make the table unreadable.
+    base_label = f"{base_judge} [{args.baseline or 'baseline'}]"
+    variant_label = f"{variant_judge} [{args.variant}]"
+    same_model = base_judge == variant_judge
 
     lines: list[str] = []
     lines.append(f"# Grader sensitivity — {preset.display_name} (`{preset.repo}`)\n")
-    lines.append(f"- baseline judge: `{base_judge}`")
-    lines.append(f"- variant judge: `{variant_judge}`")
+    lines.append(f"- baseline judge: `{base_label}`")
+    lines.append(f"- variant judge: `{variant_label}`")
     lines.append(
         "- answers are identical in both runs; only the grader differs "
         "(`evaluate --regrade`)\n"
     )
+    if same_model:
+        lines.append(
+            "> **Both runs used the same model.** This table therefore measures the "
+            "grader's own run-to-run noise, which sets the floor below which a "
+            "difference between two systems must not be read as a result.\n"
+        )
 
     lines.append("## Accuracy under each grader\n")
-    lines.append(f"| system | n | dropped | `{base_judge}` | `{variant_judge}` | delta |")
+    lines.append(f"| system | n | dropped | `{base_label}` | `{variant_label}` | delta |")
     lines.append("|---|---|---|---|---|---|")
     total_dropped = 0
     for system, row in rows.items():
@@ -194,11 +205,11 @@ def main(argv: list[str] | None = None) -> int:
                 f"Best retrieval system by baseline accuracy: `{best}`.\n"
             )
             lines.append(
-                f"- gain under `{base_judge}`: **{base_gain:+.3f}** "
+                f"- gain under `{base_label}`: **{base_gain:+.3f}** "
                 f"({b_row['baseline_accuracy']:.3f} -> {v_row['baseline_accuracy']:.3f})"
             )
             lines.append(
-                f"- gain under `{variant_judge}`: **{var_gain:+.3f}** "
+                f"- gain under `{variant_label}`: **{var_gain:+.3f}** "
                 f"({b_row['variant_accuracy']:.3f} -> {v_row['variant_accuracy']:.3f})"
             )
             lines.append("")
@@ -208,8 +219,8 @@ def main(argv: list[str] | None = None) -> int:
             lines.append(f"**Ranking stability**: {'identical' if stable else 'changed'} "
                          f"under both graders.")
             lines.append("")
-            lines.append(f"- under `{base_judge}`: `{' < '.join(base_order)}`")
-            lines.append(f"- under `{variant_judge}`: `{' < '.join(var_order)}`")
+            lines.append(f"- under `{base_label}`: `{' < '.join(base_order)}`")
+            lines.append(f"- under `{variant_label}`: `{' < '.join(var_order)}`")
             lines.append("")
             if not stable:
                 moved = [

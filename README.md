@@ -35,12 +35,15 @@ Measured on 29 hand-reviewed items against `vitejs/vite`:
 Retrieval clearly helps — **but the size of the gain depends on who grades it**,
 so this repo reports an interval rather than one number:
 
-- under the in-project judge: **0.138 → 0.586** (4.1×)
-- under an independent stricter grader: **0.328 → 0.464** (1.4×)
+- under the in-project judge: **0.138 → 0.586** (4.2×)
+- under an independent stricter grader: **0.328 → 0.483** (1.5×)
 
-The ranking of the five configurations is identical under both graders; only the
-magnitude moves. Retrieval also *raises* the fabrication rate, which is the least
-obvious result here. Both are discussed under [Results](#results).
+What *does* hold under both graders is the shape of the result: closed-book is
+worst and the reranked system is best. The ordering among the three plain
+retrievers is **not** stable and is reported as unresolved, because they sit
+within one item of each other and the grader has its own run-to-run noise.
+Retrieval also *raises* the fabrication rate, which is the least obvious result
+here. All of it is discussed under [Results](#results).
 
 ---
 
@@ -196,48 +199,51 @@ invented version, API, or file path._
 ### How much of this is the judge?
 
 The judge above is `deepseek-chat`, the same model that wrote the answers —
-circular. So every answer was re-graded blind by a **different model**,
-`deepseek-reasoner`, against the same rubric:
+circular. So every answer was re-graded by a **different model**,
+`deepseek-reasoner`, over the *same stored answers* (`evaluate --regrade`), and
+then the reasoner was run a **second time** to measure its own noise. All three
+runs are committed under `data/results/` and regenerate with `make regrade` +
+`make sensitivity`.
 
-| system | items | exact agreement | binary agreement |
+**Run A vs run B (different model, same answers):**
+
+| system | `deepseek-chat` | `deepseek-reasoner` | delta |
 |---|---|---|---|
-| `closed_book` | 29 | 48.3% | 48.3% |
-| `bm25` | 28 | 78.6% | 78.6% |
-| `dense` | 28 | 85.7% | 85.7% |
-| `hybrid` | 28 | 92.9% | 96.4% |
-| `hybrid + rerank` | 28 | 82.1% | 82.1% |
+| `closed_book` | 0.138 | 0.328 | **+0.190** |
+| `bm25` | 0.483 | 0.414 | −0.069 |
+| `dense` | 0.448 | 0.362 | −0.086 |
+| `hybrid` | 0.466 | 0.466 | 0.000 |
+| `hybrid + rerank` | 0.586 | 0.483 | −0.103 |
+| **closed_book → best RAG** | **+0.448** (4.2×) | **+0.155** (1.5×) | |
 
-Agreement tracks answer quality. When an answer plainly resolves the question,
-both graders agree; when it is vague generic troubleshooting — which is what
-closed-book answers are — they split on the partial/incorrect boundary.
+**Run B vs run C (same model twice — the noise floor):**
 
-Re-scoring everything with the second grader moves the headline:
+| system | `deepseek-reasoner` [a] | `deepseek-reasoner` [b] | delta |
+|---|---|---|---|
+| `closed_book` | 0.328 | 0.345 | +0.017 |
+| `bm25` | 0.414 | 0.397 | −0.017 |
+| `dense` | 0.339 | 0.375 | +0.036 |
+| `hybrid` | 0.466 | 0.431 | −0.035 |
+| `hybrid + rerank` | 0.483 | 0.552 | **+0.069** |
 
-| system | `deepseek-chat` | `deepseek-reasoner` |
-|---|---|---|
-| `closed_book` | 0.138 | 0.328 |
-| `bm25` | 0.464 | 0.429 |
-| `dense` | 0.429 | 0.357 |
-| `hybrid` | 0.446 | 0.411 |
-| `hybrid + rerank` | 0.571 | 0.464 |
-| **closed_book → best RAG, gain** | **+0.433 (4.1×)** | **+0.137 (1.4×)** |
+Two runs of the *same* grader agree on only **71–93%** of verdicts depending on
+the system. So the grader is itself stochastic, and **~0.07 accuracy is noise**;
+differences smaller than that between two systems are not results.
 
-**Two conclusions, and the second is the important one.**
+### What survives, and what does not
 
-1. **The ranking is invariant.** Both graders order the systems identically:
-   `closed_book < dense < hybrid < bm25 < hybrid+rerank`. Every relative claim
-   in this README survives the substitution.
+| claim | verdict |
+|---|---|
+| Retrieval beats closed-book | **holds** — every run, every grader |
+| The reranked system is the best retrieval config | **holds** — in all three runs |
+| The gain is "4×" | **does not hold** — it is **1.5×–4.2×** |
+| `bm25` vs `hybrid` vs `dense` ordering | **unresolved** — they swap between graders and sit within 0.07 of each other |
 
-2. **The magnitude is not.** The gain is somewhere between 1.4× and 4.1×
-   depending on who grades. Quoting "4×" alone would be picking the flattering
-   end of an interval this project measured itself. The defensible claim is:
-   *retrieval clearly helps, by roughly **1.4× to 4×**, and the width of that
-   interval is the most interesting result here.*
-
-The mechanism shows up in the disagreements: the stricter grader gives partial
-credit to generic advice (raising closed-book) and withdraws it from answers that
-pair a correct fix with an invented version number (lowering RAG). Neither grader
-is ground truth, which is exactly why an interval is reported instead of a point.
+The mechanism shows up in the transitions: the stricter grader gives partial
+credit to generic advice (lifting closed-book by 0.19) and withdraws it from
+answers that pair a correct fix with an invented version number (lowering the
+reranked system by 0.10). Neither grader is ground truth, and the three runs
+together are the honest estimate rather than any one of them.
 
 ### On the 28 items the closed-book model got wrong
 
@@ -276,10 +282,12 @@ needs questions whose answers appear in several threads, or paraphrased queries.
 
 ### Five things worth noticing in those numbers
 
-**1. Retrieval helps, but by how much depends on who grades.** Under the
-in-project judge the gain is 0.138 → 0.586 (4.1×); under a second, stricter
-grader it is 0.328 → 0.464 (1.4×). The *ordering* of the five systems is
-identical under both. Quote the interval, never one end of it — see
+**1. Retrieval helps, but by how much depends on who grades, and the grader is
+itself noisy.** Under the in-project judge the gain is 0.138 → 0.586 (4.2×);
+under a second, stricter model it is 0.328 → 0.483 (1.5×); and two runs of that
+second model disagree with each other on 7–29% of verdicts. What survives all
+three runs is the *shape*: closed-book worst, reranked best. What does not is any
+ordering among the three plain retrievers, or any single number. See
 [How much of this is the judge](#how-much-of-this-is-the-judge).
 
 **2. The retriever choice is noise; the reranker is not.** BM25, dense, and hybrid
@@ -339,11 +347,13 @@ that gap survives a stronger generator.
 
 Stated plainly, because a results table without limitations is marketing.
 
-* **LLM-as-judge, and the graders disagree.** Grading is done by a model, and two
-  different models agree on only 48%–93% of items depending on answer quality. A
-  cross-model re-grade is committed (`data/results/*judge_agreement*.json`), the
-  sensitivity range is reported instead of a point estimate, and the ranking is
-  shown to be stable under substitution. What is *missing* is a **human**
+* **LLM-as-judge, and the grader is noisy as well as debatable.** Two different
+  models agree on only 48%–93% of verdicts, and — the part that is easy to miss —
+  the *same* model run twice agrees with itself on only 71%–93%. That self-noise
+  is worth ~0.07 accuracy, so system differences below that threshold are not
+  interpretable here. Three runs are committed (`data/results/*sensitivity*`), the
+  gain is reported as a 1.5×–4.2× interval, and the claims that survive are
+  separated from the ones that do not. What is still *missing* is a **human**
   validation: no human has graded these items, so "agreement with a second model"
   must not be read as "agreement with the truth".
 * **Mined eval set, not a curated benchmark.** Maintainer replies are occasionally

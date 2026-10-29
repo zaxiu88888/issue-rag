@@ -218,13 +218,27 @@ Three gotchas, all learned the hard way:
 - **Raise `--judge-max-tokens` to ~3000 for a reasoning model.** `deepseek-reasoner`
   spends a 160-token budget on its reasoning trace and returns an *empty* final
   message, so every verdict silently parses as `unparsed` and the run looks like a
-  total disagreement.
+  total disagreement. One item (`q8412`) still failed at 4000 and needed 6000;
+  `--regrade` retries `unparsed` records on a rerun rather than caching them as done.
 - **Report the sensitivity, not just the agreement.** Swapping the grader in this
-  project moved the headline gain from 4.1× to 1.4× while leaving the ranking of
-  the five systems unchanged. An agreement number alone would have hidden that.
-- **Agreement rises with answer quality** (48% on closed-book, 79–93% on retrieval
-  systems). A single pooled agreement figure would understate agreement exactly
-  where the numbers matter.
+  project moved the headline gain from 4.2× to 1.5×.
+- **Measure the grader against itself, because it is stochastic.** A third run with
+  the *same* model disagrees with the second on 7–29% of verdicts, which is worth
+  about 0.07 accuracy. That number is the floor: any difference between two systems
+  smaller than it is not a result. Run it with the committed tool, no extra code:
+
+  ```bash
+  make regrade    VARIANT=reasoner2 VARIANT_MODEL=deepseek-reasoner
+  make sensitivity VARIANT=reasoner2 BASELINE=reasoner
+  ```
+
+  The output detects that both sides used the same model and labels itself as a
+  noise-floor measurement.
+
+- **Do not claim a ranking that flips inside the noise band.** Here `bm25`, `hybrid`
+  and `dense` swap places between graders while sitting within 0.07 of each other;
+  the honest report says "unresolved". Only the extremes (closed-book worst, the
+  reranked system best) survive all three runs.
 
 **b) Human review — not yet done, and still the highest-value hour left.** Grade
 30 items yourself against `reference_answer` using the shards under
