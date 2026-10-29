@@ -249,6 +249,39 @@ If either audit shows agreement below ~80% on the *binary* question (usable vs
 not), tighten `judge.py:GRADE_SYSTEM` — the partial/incorrect boundary is where
 both graders disagree, so define it more literally before collecting more data.
 
+### The rubric is versioned, and changing it invalidates old numbers
+
+`judge.GRADE_SYSTEM` has been through three versions:
+
+| version | how a verdict is chosen | shipped? |
+|---|---|---|
+| ① holistic | the model picks correct/partial/incorrect directly | no |
+| ② four checks, broad `wrong_specific` | model answers 4 booleans, code maps them; the "wrong specific" check fired on any detail absent from the reference | no |
+| ③ four checks, narrow `wrong_specific` | same, but the check only counts a conflicting/invented **version or issue number** | **yes** |
+
+Version ② is the example to remember: it raised per-item agreement to 93% while
+collapsing every score, because 97% of answers were flagged as fabricating. A
+reproducible grader that is wrong is worse than a noisy one that is roughly right.
+
+**Consequence for you:** the numbers in `README.md` and `data/results/*` were
+produced by rubric ①. The repo ships ③. Do not mix them:
+
+```bash
+# re-baseline under the shipped rubric, then re-run the comparison
+make eval                                  # regenerates the untagged shards
+make regrade  VARIANT=reasoner  VARIANT_MODEL=deepseek-reasoner
+make sensitivity VARIANT=reasoner
+```
+
+That is roughly 8 minutes and ~¥1 for the baseline, and it is a prerequisite for
+publishing any new number. On the two systems measured, rubric ③ moves
+closed_book 0.336 → 0.287 and the reranked system 0.517 → 0.562, i.e. the gain
+slightly **increases**.
+
+**How to tell a rubric change helped:** not by agreement alone. Check three
+things — run-to-run Δ on the reported aggregate, the level itself, and which
+sub-answer fired. Arm ② won on agreement and lost on the other two.
+
 ---
 
 ## 6. Publish

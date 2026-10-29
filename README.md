@@ -245,6 +245,44 @@ answers that pair a correct fix with an invented version number (lowering the
 reranked system by 0.10). Neither grader is ground truth, and the three runs
 together are the honest estimate rather than any one of them.
 
+### The rubric itself was an experiment
+
+The judge above asked for a verdict directly. Two runs of the same model disagreed
+on 7–29% of items, and the disagreements clustered on the partial/incorrect
+boundary — precisely the decision a holistic prompt leaves undefined. So the
+grader was rewritten to answer four factual sub-questions, with the verdict mapped
+in code (`judge.verdict_from_checks`).
+
+The first attempt made things worse in an instructive way. Each arm below is two
+runs of `deepseek-reasoner` over the same stored answers:
+
+| rubric | closed_book | hybrid+rerank | run-to-run Δ (rerank) | exact agreement (rerank) |
+|---|---|---|---|---|
+| ① holistic (original) | 0.336 | 0.517 | 0.069 | 82.8% |
+| ② four checks, `wrong_specific` = "any detail absent from the reference" | 0.034 | 0.259 | 0.069 | 93.1% |
+| ③ four checks, `wrong_specific` = "a version/issue number the reference contradicts" | 0.287 | **0.562** | **0.018** | 82.1% |
+
+**Arm ② is the cautionary one.** It raised exact agreement to 93% and destroyed
+both scores, because "absent from the reference" is not "invented" — a retrieval
+answer legitimately quotes details from other excerpts, and the broad check flagged
+97% of closed-book answers and 93% of retrieval answers as fabricating. Reproducible
+and wrong is worse than noisy and roughly right.
+
+**Arm ③** narrows the check to version and issue numbers only, which drops the
+flag rate to 0% / 19%. The scores return and the run-to-run difference on the
+system that matters falls 3.8× (0.069 → 0.018).
+
+One honest limit: arm ③ does **not** improve per-item agreement (82.1% vs 82.8%).
+What it improves is the *net* shift between runs — the errors cancel instead of
+biasing the aggregate. Since every number reported here is an aggregate, that is
+the variance that mattered.
+
+> **Which rubric produced the tables above?** Rubric ①, kept so the earlier runs
+> stay comparable. The repo now ships ③. Re-running `make eval` with it moves the
+> two extremes by about −0.05 (closed_book) and +0.05 (reranked) on two measured
+> systems, which slightly *increases* the gain; the RUNBOOK makes that re-baseline
+> a prerequisite for publishing new numbers.
+
 ### On the 28 items the closed-book model got wrong
 
 | system | accuracy | correct | incorrect | fabricated |

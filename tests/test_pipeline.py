@@ -1,4 +1,4 @@
-"""Unit tests for the parts that can run with no network, GPU, or model weights.
+﻿"""Unit tests for the parts that can run with no network, GPU, or model weights.
 
 The heavy stages (harvest, embed, generate) are not covered here on purpose:
 they are expensive and flaky to test hermetically. What *is* covered is every
@@ -569,7 +569,7 @@ def _checks(**overrides) -> dict:
     base = {
         "states_resolution": False,
         "generic_advice_only": False,
-        "fabricated_specifics": False,
+        "wrong_specific": False,
         "contradicts": False,
     }
     base.update(overrides)
@@ -583,11 +583,11 @@ def test_verdict_mapping_is_pinned():
     assert verdict_from_checks(_checks(contradicts=True)) == "incorrect"
     assert verdict_from_checks(_checks(states_resolution=True)) == "correct"
     assert (
-        verdict_from_checks(_checks(states_resolution=True, fabricated_specifics=True))
+        verdict_from_checks(_checks(states_resolution=True, wrong_specific=True))
         == "partial"
     )
     assert verdict_from_checks(_checks(generic_advice_only=True)) == "incorrect"
-    assert verdict_from_checks(_checks(fabricated_specifics=True)) == "incorrect"
+    assert verdict_from_checks(_checks(wrong_specific=True)) == "incorrect"
     assert verdict_from_checks(_checks()) == "partial"
 
 
@@ -601,7 +601,7 @@ def test_contradiction_dominates_every_other_flag():
                     contradicts=True,
                     states_resolution=states,
                     generic_advice_only=generic,
-                    fabricated_specifics=fab,
+                    wrong_specific=fab,
                 )
                 assert verdict_from_checks(checks) == "incorrect"
 
@@ -613,7 +613,7 @@ def test_verdict_mapping_covers_all_sixteen_combinations():
 
     for combo in itertools.product([True, False], repeat=4):
         checks = dict(zip(("states_resolution", "generic_advice_only",
-                           "fabricated_specifics", "contradicts"), combo))
+                           "wrong_specific", "contradicts"), combo))
         assert verdict_from_checks(checks) in VERDICTS
 
 
@@ -623,7 +623,7 @@ def test_extract_checks_rejects_missing_keys():
 
     assert extract_checks({"states_resolution": True}) is None
     partial_payload = _checks()
-    del partial_payload["fabricated_specifics"]
+    del partial_payload["wrong_specific"]
     assert extract_checks(partial_payload) is None
 
 
@@ -633,13 +633,13 @@ def test_extract_checks_accepts_strings_and_ints():
     parsed = {
         "states_resolution": "true",
         "generic_advice_only": "false",
-        "fabricated_specifics": 1,
+        "wrong_specific": 1,
         "contradicts": 0,
     }
     assert extract_checks(parsed) == {
         "states_resolution": True,
         "generic_advice_only": False,
-        "fabricated_specifics": True,
+        "wrong_specific": True,
         "contradicts": False,
     }
 
@@ -649,7 +649,7 @@ def test_judge_grades_through_the_mapping_not_the_model():
     from issue_rag.judge import Judge
 
     payload = json.dumps(
-        _checks(states_resolution=True, fabricated_specifics=True)
+        _checks(states_resolution=True, wrong_specific=True)
         | {"reason": "right fix, invented version"}
     )
     grade = Judge(_StubJudgeModel(payload)).grade("q", "ref", "cand")

@@ -1,4 +1,4 @@
-"""LLM-as-judge scoring with the mapping moved out of the model.
+﻿"""LLM-as-judge scoring with the mapping moved out of the model.
 
 Why this is not "ask the model to rate the answer"
 --------------------------------------------------
@@ -19,7 +19,7 @@ disagreement:
    a repro" applies to any project and is false for this question. A whole model
    could be raised or lowered by grading it generously, and that is what happened
    to the closed-book baseline.
-2. **A fabricated specific caps the verdict at partial.** Inventing a version
+2. **A wrong version/issue number caps the verdict at partial.** Inventing a version
    number, issue number, API symbol or file path cannot be "correct" even when the
    rest of the answer is right.
 
@@ -41,7 +41,7 @@ VERDICTS = ("correct", "partial", "incorrect")
 CHECK_KEYS = (
     "states_resolution",
     "generic_advice_only",
-    "fabricated_specifics",
+    "wrong_specific",
     "contradicts",
 )
 
@@ -57,15 +57,17 @@ GRADE_SYSTEM = (
     "to any project (clear the cache, update Node, check your config, read the "
     "docs, provide a minimal reproduction, try a different version)? Answer "
     "false if it also says anything specific to this question.\n\n"
-    "3. fabricated_specifics — does CANDIDATE name a version number, issue "
-    "number, file path, configuration key or API symbol that does NOT appear in "
-    "REFERENCE and cannot be derived from it? Inventing a plausible-looking "
-    "specific counts as true, even if the surrounding advice is sane.\n\n"
+    "3. wrong_specific — does CANDIDATE give a version number or issue number "
+    "that CONFLICTS with REFERENCE, or assert a specific version/issue number "
+    "when REFERENCE gives none? Answer false when the candidate simply says more "
+    "than the reference, cites another issue, quotes a config key, or adds "
+    "context — extra detail is not a wrong specific. Only a version/issue number "
+    "that the reference contradicts, or a confidently invented one, counts.\n\n"
     "4. contradicts — does CANDIDATE assert something REFERENCE denies, or "
     "recommend an action that would not address the reported problem?\n\n"
     "Reply with JSON only, no prose:\n"
     '{"states_resolution": true|false, "generic_advice_only": true|false, '
-    '"fabricated_specifics": true|false, "contradicts": true|false, '
+    '"wrong_specific": true|false, "contradicts": true|false, '
     '"reason": "<one sentence>"}'
 )
 
@@ -122,14 +124,15 @@ def verdict_from_checks(checks: dict[str, Any]) -> str:
     * states the resolution, clean    -> correct
     * states the resolution, invented -> partial    (right fix, wrong specifics)
     * no resolution, generic advice   -> incorrect  (applies to anything)
-    * no resolution, invented         -> incorrect
+    * no resolution, born of a wrong  -> incorrect
+      version/issue number
     * no resolution, on-topic/clean   -> partial    (relevant but incomplete)
     """
     if checks.get("contradicts"):
         return "incorrect"
     if checks.get("states_resolution"):
-        return "partial" if checks.get("fabricated_specifics") else "correct"
-    if checks.get("generic_advice_only") or checks.get("fabricated_specifics"):
+        return "partial" if checks.get("wrong_specific") else "correct"
+    if checks.get("generic_advice_only") or checks.get("wrong_specific"):
         return "incorrect"
     return "partial"
 
@@ -194,7 +197,7 @@ class Judge:
             )
         return Grade(
             verdict=verdict_from_checks(checks),
-            fabricated=checks["fabricated_specifics"],
+            fabricated=checks["wrong_specific"],
             reason=str(parsed.get("reason", ""))[:400],
             raw=result.text,
             checks=checks,

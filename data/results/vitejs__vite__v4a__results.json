@@ -1,0 +1,41 @@
+{
+  "summaries": [
+    {
+      "system": "closed_book",
+      "n": 29,
+      "errors": 0,
+      "error_rate": 0.0,
+      "accuracy": 0.2759,
+      "correct_rate": 6.9,
+      "partial_rate": 41.4,
+      "incorrect_rate": 48.3,
+      "unparsed_rate": 3.4,
+      "fabricated_rate": 0.0,
+      "cited_rate": 0.0,
+      "latency_p50_s": 4.31,
+      "latency_p95_s": 4.89
+    },
+    {
+      "system": "hybrid_rerank",
+      "n": 29,
+      "errors": 0,
+      "error_rate": 0.0,
+      "accuracy": 0.5345,
+      "correct_rate": 41.4,
+      "partial_rate": 24.1,
+      "incorrect_rate": 31.0,
+      "unparsed_rate": 3.4,
+      "fabricated_rate": 17.2,
+      "cited_rate": 100.0,
+      "latency_p50_s": 3.92,
+      "latency_p95_s": 4.29
+    }
+  ],
+  "retrieval": {},
+  "n_items": 29,
+  "n_closed_book_missed": 0,
+  "subgroup_closed_book_missed": [],
+  "run_tag": "v4a",
+  "judge": "deepseek-reasoner",
+  "regrade": true
+}
