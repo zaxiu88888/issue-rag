@@ -1,0 +1,77 @@
+{
+  "preset": "vitejs/vite",
+  "baseline_judge": "deepseek-chat",
+  "variant_judge": "deepseek-chat",
+  "systems": {
+    "closed_book": {
+      "n": 29,
+      "dropped": 2,
+      "baseline_accuracy": 0.1379,
+      "variant_accuracy": 0.1897,
+      "delta": 0.0517,
+      "exact_agreement": 75.9,
+      "binary_agreement": 82.8,
+      "verdict_transitions": {
+        "incorrect -> partial": 3,
+        "partial -> incorrect": 2,
+        "partial -> correct": 2
+      }
+    },
+    "bm25": {
+      "n": 29,
+      "dropped": 2,
+      "baseline_accuracy": 0.4828,
+      "variant_accuracy": 0.5172,
+      "delta": 0.0345,
+      "exact_agreement": 72.4,
+      "binary_agreement": 86.2,
+      "verdict_transitions": {
+        "partial -> correct": 3,
+        "incorrect -> partial": 2,
+        "partial -> incorrect": 2,
+        "correct -> partial": 1
+      }
+    },
+    "dense": {
+      "n": 29,
+      "dropped": 0,
+      "baseline_accuracy": 0.4483,
+      "variant_accuracy": 0.4655,
+      "delta": 0.0172,
+      "exact_agreement": 65.5,
+      "binary_agreement": 65.5,
+      "verdict_transitions": {
+        "incorrect -> partial": 6,
+        "partial -> incorrect": 3,
+        "correct -> incorrect": 1
+      }
+    },
+    "hybrid": {
+      "n": 29,
+      "dropped": 0,
+      "baseline_accuracy": 0.4655,
+      "variant_accuracy": 0.5,
+      "delta": 0.0345,
+      "exact_agreement": 65.5,
+      "binary_agreement": 72.4,
+      "verdict_transitions": {
+        "partial -> incorrect": 4,
+        "incorrect -> partial": 4,
+        "partial -> correct": 2
+      }
+    },
+    "hybrid_rerank": {
+      "n": 29,
+      "dropped": 0,
+      "baseline_accuracy": 0.5862,
+      "variant_accuracy": 0.5,
+      "delta": -0.0862,
+      "exact_agreement": 82.8,
+      "binary_agreement": 82.8,
+      "verdict_transitions": {
+        "partial -> incorrect": 5
+      }
+    }
+  },
+  "missing": []
+}

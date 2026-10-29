@@ -220,12 +220,15 @@ Three gotchas, all learned the hard way:
   message, so every verdict silently parses as `unparsed` and the run looks like a
   total disagreement. One item (`q8412`) still failed at 4000 and needed 6000;
   `--regrade` retries `unparsed` records on a rerun rather than caching them as done.
-- **Report the sensitivity, not just the agreement.** Swapping the grader in this
-  project moved the headline gain from 4.2× to 1.5×.
-- **Measure the grader against itself, because it is stochastic.** A third run with
-  the *same* model disagrees with the second on 7–29% of verdicts, which is worth
-  about 0.07 accuracy. That number is the floor: any difference between two systems
-  smaller than it is not a result. Run it with the committed tool, no extra code:
+- **Report the sensitivity, not just the agreement.** In this project the reported
+  gain moved from 4.2× to 2.6× purely by correcting the rubric, and the
+  cross-judge interval is 1.9×–2.6×. An agreement percentage on its own would have
+  hidden both.
+- **Measure the grader against itself, because it is stochastic.** A run with the
+  *same* model disagrees with the previous one on 7–29% of verdicts, which was worth
+  about 0.07 accuracy under the original rubric and about 0.01 under the shipped
+  one. That number is the floor: any difference between two systems smaller than it
+  is not a result. Run it with the committed tool, no extra code:
 
   ```bash
   make regrade    VARIANT=reasoner2 VARIANT_MODEL=deepseek-reasoner

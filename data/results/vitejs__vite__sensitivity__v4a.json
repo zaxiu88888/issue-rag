@@ -1,0 +1,38 @@
+{
+  "preset": "vitejs/vite",
+  "baseline_judge": "deepseek-chat",
+  "variant_judge": "deepseek-reasoner",
+  "systems": {
+    "closed_book": {
+      "n": 28,
+      "dropped": 1,
+      "baseline_accuracy": 0.1964,
+      "variant_accuracy": 0.2857,
+      "delta": 0.0893,
+      "exact_agreement": 53.6,
+      "binary_agreement": 57.1,
+      "verdict_transitions": {
+        "incorrect -> partial": 8,
+        "partial -> incorrect": 2,
+        "incorrect -> correct": 1,
+        "correct -> partial": 1,
+        "correct -> incorrect": 1
+      }
+    },
+    "hybrid_rerank": {
+      "n": 28,
+      "dropped": 1,
+      "baseline_accuracy": 0.5179,
+      "variant_accuracy": 0.5536,
+      "delta": 0.0357,
+      "exact_agreement": 75.0,
+      "binary_agreement": 75.0,
+      "verdict_transitions": {
+        "incorrect -> partial": 5,
+        "partial -> incorrect": 1,
+        "correct -> incorrect": 1
+      }
+    }
+  },
+  "missing": []
+}

@@ -93,15 +93,27 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--variant",
         required=True,
-        help="run tag of the second judge's run (see evaluate --run-tag)",
+        help=(
+            "run tag of the second run (see evaluate --run-tag). Use the literal "
+            "'untagged' to address the untagged arm."
+        ),
     )
     parser.add_argument(
         "--systems", default=",".join(DEFAULT_SYSTEMS), help="comma separated"
     )
     parser.add_argument(
-        "--baseline", default="", help="run tag of the baseline (default: untagged)"
+        "--baseline",
+        default="",
+        help="run tag of the baseline (default: untagged; 'untagged' also works)",
     )
     args = parser.parse_args(argv)
+
+    # The untagged arm has an empty tag, which cannot be typed as a normal
+    # argument, so accept the word explicitly.
+    if args.variant.strip().lower() == "untagged":
+        args.variant = ""
+    if args.baseline.strip().lower() == "untagged":
+        args.baseline = ""
 
     load_env_file()
     preset: RepoPreset = load_preset(args.preset)

@@ -684,3 +684,12 @@ def test_judge_empty_candidate_is_incorrect_without_a_call():
     grade = Judge(stub).grade("q", "ref", "   ")
     assert grade.verdict == "incorrect"
     assert grade.raw == ""
+
+
+def test_regrade_refuses_to_write_into_the_arm_it_reads():
+    """Reading arm X and writing arm X would double-count and corrupt X."""
+    from issue_rag.evaluate import main
+
+    with pytest.raises(SystemExit):
+        main(["--preset", "vite", "--regrade", "--regrade-from", "v1holistic",
+              "--run-tag", "v1holistic", "--judge-model", "x"])

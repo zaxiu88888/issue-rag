@@ -327,7 +327,7 @@ def regrade_system(
     would make the comparison confounded by sampling differences and would cost
     twice as much.
     """
-    base = load_shard(shard_path(preset, system))
+    base = load_shard(shard_path(preset, system, args.regrade_from))
     target = shard_path(preset, system, args.run_tag)
     # "unparsed" means the grader emitted no parseable JSON -- usually a reasoning
     # model whose trace consumed the whole budget. That is a failure, not a
@@ -339,7 +339,11 @@ def regrade_system(
         for iid, rec in load_shard(target).items()
         if rec.get("verdict") != "unparsed"
     }
-    print(f"\n[{system}] re-grading with {judge.model.name} (answers reused)")
+    source_label = args.regrade_from or "untagged"
+    print(
+        f"\n[{system}] re-grading from '{source_label}' with {judge.model.name} "
+        f"(answers reused)"
+    )
 
     with target.open("a", encoding="utf-8") as handle:
         for position, item in enumerate(items, start=1):
@@ -553,10 +557,19 @@ def build_parser() -> argparse.ArgumentParser:
         "--regrade",
         action="store_true",
         help=(
-            "re-grade the answers already stored in the untagged shards instead "
-            "of generating new ones. Holds the generator fixed and varies only "
-            "the judge, which is what makes a grader-sensitivity comparison "
-            "meaningful. Needs --run-tag and a different --judge-model."
+            "re-grade the answers already stored in a shard instead of "
+            "generating new ones. Holds the generator fixed and varies only "
+            "the judge (or the rubric), which is what makes a grader-sensitivity "
+            "comparison meaningful."
+        ),
+    )
+    parser.add_argument(
+        "--regrade-from",
+        default="",
+        help=(
+            "source arm to re-grade (default: the untagged run). Use this to "
+            "re-judge an archived arm into a new tag, e.g. to compare rubrics "
+            "over identical answers."
         ),
     )
     parser.add_argument("--retrieval-only", action="store_true")
@@ -624,12 +637,16 @@ def main(argv: list[str] | None = None) -> int:
 
     systems = [s.strip() for s in args.systems.split(",") if s.strip()]
 
-    if args.regrade and not args.run_tag:
+    if args.regrade and (args.run_tag or "") == (args.regrade_from or ""):
         raise SystemExit(
-            "--regrade needs --run-tag, otherwise it would append to (and corrupt) "
-            "the baseline shards it is reading from. Example:\n"
+            "--regrade must write somewhere other than the arm it reads.\n"
+            f"  reading : {args.regrade_from or '(untagged)'}\n"
+            f"  writing : {args.run_tag or '(untagged)'}\n"
+            "Pick a --run-tag (new arm), or set --regrade-from to an archived arm "
+            "you want to re-judge, e.g.:\n"
             "  python -m issue_rag.evaluate --preset vite --regrade \\\n"
-            "    --judge-model deepseek-reasoner --judge-max-tokens 3000 --run-tag reasoner"
+            "    --regrade-from v1holistic --run-tag '' "
+            "--judge-model deepseek-chat"
         )
 
     retrieval: dict[str, dict[str, float]] = {}

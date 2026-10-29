@@ -1,0 +1,187 @@
+{
+  "summaries": [
+    {
+      "system": "closed_book",
+      "n": 29,
+      "errors": 0,
+      "error_rate": 0.0,
+      "accuracy": 0.1379,
+      "correct_rate": 3.4,
+      "partial_rate": 20.7,
+      "incorrect_rate": 75.9,
+      "unparsed_rate": 0.0,
+      "fabricated_rate": 13.8,
+      "cited_rate": 0.0,
+      "latency_p50_s": 4.31,
+      "latency_p95_s": 4.89
+    },
+    {
+      "system": "bm25",
+      "n": 29,
+      "errors": 0,
+      "error_rate": 0.0,
+      "accuracy": 0.4828,
+      "correct_rate": 31.0,
+      "partial_rate": 34.5,
+      "incorrect_rate": 34.5,
+      "unparsed_rate": 0.0,
+      "fabricated_rate": 31.0,
+      "cited_rate": 100.0,
+      "latency_p50_s": 3.76,
+      "latency_p95_s": 4.45
+    },
+    {
+      "system": "dense",
+      "n": 29,
+      "errors": 0,
+      "error_rate": 0.0,
+      "accuracy": 0.4483,
+      "correct_rate": 31.0,
+      "partial_rate": 27.6,
+      "incorrect_rate": 41.4,
+      "unparsed_rate": 0.0,
+      "fabricated_rate": 34.5,
+      "cited_rate": 100.0,
+      "latency_p50_s": 3.74,
+      "latency_p95_s": 4.3
+    },
+    {
+      "system": "hybrid",
+      "n": 29,
+      "errors": 0,
+      "error_rate": 0.0,
+      "accuracy": 0.4655,
+      "correct_rate": 31.0,
+      "partial_rate": 31.0,
+      "incorrect_rate": 37.9,
+      "unparsed_rate": 0.0,
+      "fabricated_rate": 27.6,
+      "cited_rate": 100.0,
+      "latency_p50_s": 3.68,
+      "latency_p95_s": 3.97
+    },
+    {
+      "system": "hybrid_rerank",
+      "n": 29,
+      "errors": 0,
+      "error_rate": 0.0,
+      "accuracy": 0.5862,
+      "correct_rate": 44.8,
+      "partial_rate": 27.6,
+      "incorrect_rate": 27.6,
+      "unparsed_rate": 0.0,
+      "fabricated_rate": 31.0,
+      "cited_rate": 100.0,
+      "latency_p50_s": 3.92,
+      "latency_p95_s": 4.29
+    }
+  ],
+  "retrieval": {
+    "bm25": {
+      "recall@5": 1.0,
+      "recall@5_loo": 0.0,
+      "mrr": 1.0,
+      "mrr_loo": 0.0
+    },
+    "dense": {
+      "recall@5": 1.0,
+      "recall@5_loo": 0.0,
+      "mrr": 1.0,
+      "mrr_loo": 0.0
+    },
+    "hybrid": {
+      "recall@5": 1.0,
+      "recall@5_loo": 0.0,
+      "mrr": 1.0,
+      "mrr_loo": 0.0
+    },
+    "hybrid_rerank": {
+      "recall@5": 1.0,
+      "recall@5_loo": 0.0,
+      "mrr": 1.0,
+      "mrr_loo": 0.0
+    }
+  },
+  "n_items": 29,
+  "n_closed_book_missed": 28,
+  "subgroup_closed_book_missed": [
+    {
+      "system": "closed_book",
+      "n": 28,
+      "errors": 0,
+      "error_rate": 0.0,
+      "accuracy": 0.1071,
+      "correct_rate": 0.0,
+      "partial_rate": 21.4,
+      "incorrect_rate": 78.6,
+      "unparsed_rate": 0.0,
+      "fabricated_rate": 14.3,
+      "cited_rate": 0.0,
+      "latency_p50_s": 4.33,
+      "latency_p95_s": 4.89
+    },
+    {
+      "system": "bm25",
+      "n": 28,
+      "errors": 0,
+      "error_rate": 0.0,
+      "accuracy": 0.4643,
+      "correct_rate": 28.6,
+      "partial_rate": 35.7,
+      "incorrect_rate": 35.7,
+      "unparsed_rate": 0.0,
+      "fabricated_rate": 32.1,
+      "cited_rate": 100.0,
+      "latency_p50_s": 3.76,
+      "latency_p95_s": 4.45
+    },
+    {
+      "system": "dense",
+      "n": 28,
+      "errors": 0,
+      "error_rate": 0.0,
+      "accuracy": 0.4643,
+      "correct_rate": 32.1,
+      "partial_rate": 28.6,
+      "incorrect_rate": 39.3,
+      "unparsed_rate": 0.0,
+      "fabricated_rate": 35.7,
+      "cited_rate": 100.0,
+      "latency_p50_s": 3.77,
+      "latency_p95_s": 4.3
+    },
+    {
+      "system": "hybrid",
+      "n": 28,
+      "errors": 0,
+      "error_rate": 0.0,
+      "accuracy": 0.4643,
+      "correct_rate": 32.1,
+      "partial_rate": 28.6,
+      "incorrect_rate": 39.3,
+      "unparsed_rate": 0.0,
+      "fabricated_rate": 28.6,
+      "cited_rate": 100.0,
+      "latency_p50_s": 3.68,
+      "latency_p95_s": 3.97
+    },
+    {
+      "system": "hybrid_rerank",
+      "n": 28,
+      "errors": 0,
+      "error_rate": 0.0,
+      "accuracy": 0.5714,
+      "correct_rate": 42.9,
+      "partial_rate": 28.6,
+      "incorrect_rate": 28.6,
+      "unparsed_rate": 0.0,
+      "fabricated_rate": 32.1,
+      "cited_rate": 100.0,
+      "latency_p50_s": 3.93,
+      "latency_p95_s": 4.29
+    }
+  ],
+  "run_tag": "",
+  "judge": "deepseek-chat",
+  "regrade": false
+}
