@@ -616,6 +616,23 @@ def make_judge(args: argparse.Namespace, generator: ChatModel | None) -> Judge:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+
+    # Validate arguments before touching the filesystem. These guards used to sit
+    # after the corpus load, which meant a fresh clone (no built corpus) raised
+    # FileNotFoundError instead of SystemExit — the tests looked hermetic locally
+    # only because the build artifacts happened to exist.
+    if args.regrade and (args.run_tag or "") == (args.regrade_from or ""):
+        raise SystemExit(
+            "--regrade must write somewhere other than the arm it reads.\n"
+            f"  reading : {args.regrade_from or '(untagged)'}\n"
+            f"  writing : {args.run_tag or '(untagged)'}\n"
+            "Pick a --run-tag (new arm), or set --regrade-from to an archived arm "
+            "you want to re-judge, e.g.:\n"
+            "  python -m issue_rag.evaluate --preset vite --regrade \\\n"
+            "    --regrade-from v1holistic --run-tag '' "
+            "--judge-model deepseek-chat"
+        )
+
     loaded = load_env_file()
     if loaded:
         print(f"loaded from .env: {', '.join(loaded)}")
@@ -636,18 +653,6 @@ def main(argv: list[str] | None = None) -> int:
     print(f"corpus docs: {len(corpus)}")
 
     systems = [s.strip() for s in args.systems.split(",") if s.strip()]
-
-    if args.regrade and (args.run_tag or "") == (args.regrade_from or ""):
-        raise SystemExit(
-            "--regrade must write somewhere other than the arm it reads.\n"
-            f"  reading : {args.regrade_from or '(untagged)'}\n"
-            f"  writing : {args.run_tag or '(untagged)'}\n"
-            "Pick a --run-tag (new arm), or set --regrade-from to an archived arm "
-            "you want to re-judge, e.g.:\n"
-            "  python -m issue_rag.evaluate --preset vite --regrade \\\n"
-            "    --regrade-from v1holistic --run-tag '' "
-            "--judge-model deepseek-chat"
-        )
 
     retrieval: dict[str, dict[str, float]] = {}
     if not args.regrade:
