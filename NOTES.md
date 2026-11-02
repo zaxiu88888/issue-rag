@@ -1,5 +1,7 @@
 # NOTES — what we built and why
 
+**English** | [简体中文](NOTES.zh-CN.md)
+
 This file exists because an AI-assisted project has one specific failure mode:
 the code runs, you cannot explain it, and an interviewer finds out in ninety
 seconds. Everything below is written as *something you can say out loud*.
