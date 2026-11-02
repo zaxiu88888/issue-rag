@@ -1,5 +1,7 @@
 # issue-rag — a support assistant that measures itself
 
+**English** | [简体中文](README.zh-CN.md)
+
 A retrieval-augmented question answering system over a real project's issue
 tracker, built around one question:
 

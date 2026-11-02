@@ -1008,6 +1008,39 @@ def test_retrieval_metrics_score_the_reference_comment_not_the_issue():
     assert metrics["self_share@5"] == 1.0, "the whole window comes from the same issue"
 
 
+def test_demo_page_renders_answer_markdown_instead_of_escaping_it():
+    """The answer used to be shown with ``white-space: pre-wrap`` and HTML-escaped,
+    so readers saw literal asterisks and backticks: "too messy to read". The
+    renderer still escapes first -- model output is untrusted."""
+    from issue_rag.serve import _inline_md
+
+    rendered = _inline_md("Vite defers `.env` loading.\n\n**Because** of `root`.")
+    assert "<code>.env</code>" in rendered
+    assert "<strong>Because</strong>" in rendered
+    assert rendered.count("<p>") == 2, "blank line should start a new paragraph"
+
+    xss = _inline_md("<script>alert(1)</script>")
+    assert "<script>" not in xss and "&lt;script&gt;" in xss
+
+
+def test_demo_page_citations_link_to_the_source_cards():
+    """``[3]`` was plain text, so a reader had to count cards to find the source."""
+    from issue_rag.serve import _cite_links
+
+    linked = _cite_links("see [1] and [3] and [99]", 5)
+    assert 'href="#src-1"' in linked
+    assert 'href="#src-3"' in linked
+    assert "[99]" in linked, "out-of-range citations must be left alone"
+
+
+def test_demo_page_strips_the_duplicated_title_prefix():
+    from issue_rag.serve import _strip_title_prefix
+
+    chunk = "Issue #23588: New Vite SVG logo renders incorrectly\n\nok, I reproduced it"
+    assert _strip_title_prefix(chunk) == "ok, I reproduced it"
+    assert _strip_title_prefix("no prefix here") == "no prefix here"
+
+
 def test_review_page_storage_key_changes_with_the_queue():
     """A new batch must not inherit the previous batch's browser progress.
 
