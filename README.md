@@ -524,6 +524,17 @@ Stated plainly, because a results table without limitations is marketing.
   than it would with paraphrased questions. With the comment-level metric in place
   this is now measurable rather than hidden, but a paraphrase-based query set is
   still the honest next step.
+* **English-only retrieval.** The corpus is English issue text, the BM25 tokenizer
+  applies English stopwords/stemming, and the embedding model is
+  `bge-base-en-v1.5` — an English-only checkpoint. A question asked in another
+  language is encoded into noise: retrieval returns unrelated threads and the
+  generator correctly refuses instead of inventing an answer. That refusal is the
+  right behaviour but a bad user experience, and it is a *design gap in this eval
+  set*: all 95 items are English issue titles, so the pipeline was never measured
+  on a non-English query. The demo page says "ask in English" for that reason.
+  Fixing it properly means either a multilingual embedder (and re-baselining every
+  number) or a translation step in front of retrieval (which would make the demo
+  diverge from the measured pipeline — it is deliberately not shipped).
 * **No multi-hop.** Every question is answered from a single issue thread. Questions
   that need two issues combined are out of scope.
 * **Absolute scores are generator-bound.** The shipped runs use `deepseek-chat`

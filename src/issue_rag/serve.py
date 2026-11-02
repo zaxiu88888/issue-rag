@@ -54,6 +54,11 @@ Nothing here is generated without a source.</p>
   <input type="text" name="q" value="{query}" placeholder="e.g. why does my css update twice" autofocus>
   <button type="submit">Ask</button>
 </form>
+<p class="muted"><strong>Ask in English.</strong> The corpus, the BM25 tokenizer and the
+embedding model (bge-base-en-v1.5) are all English-only, so a question written in
+another language retrieves noise and the answer will be a refusal rather than a
+wrong fact. The 95-item eval set is English for the same reason &mdash; see the
+README's Limitations.</p>
 {body}
 """
 
