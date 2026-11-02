@@ -156,6 +156,10 @@ Keep this short. One line per session: what changed, what broke, what you learne
   Three findings, below.
 - **S4** — completed the ablation: dense 0.448, hybrid 0.466, hybrid+rerank 0.586.
   The retriever rows are within noise of each other; only the reranker moves.
+- **S5** — widened the sample: 18-month window, 771 issues / 2,593 comments /
+  5,473 corpus documents, 200 candidates reviewed by hand down to **95 items**
+  (47.5% keep rate). Re-ran the whole matrix. closed_book 0.221, bm25 0.700,
+  dense 0.632, hybrid 0.695, rerank 0.679 — the gain grew from 2.72× to 3.17×.
 
 ---
 
@@ -168,14 +172,16 @@ So the questions asked were, in order: does the *rubric* matter, does the *judge
 model* matter, and does the judge even agree with itself? All comparisons reuse the
 same stored answers (`evaluate --regrade`), so only the grader varies.
 
-**a) Judge model** (rubric ③): `closed_book` 0.196 → 0.286, reranked 0.518 → 0.554
-under `deepseek-reasoner`. Gain +0.322 vs +0.268.
+**a) Judge model** (rubric ③, 95 items): `closed_book` 0.221 → 0.305, reranked
+0.679 → 0.711 under `deepseek-reasoner`. Gain 3.17× vs 2.33×. The stricter grader is
+*lenient* on closed-book and *strict* on retrieval, which compresses the gain.
 
-**b) Same judge, twice** (rubric ③): run-to-run difference 0.005 (closed_book) and
-0.010 (reranked); exact agreement 70% and 82%.
+**b) Same judge, twice** (rubric ③, 95 items): run-to-run difference 0.005–0.026 on
+the aggregate, exact agreement 79–86%. The ordering is identical in both runs.
 
 **c) The rubric itself** — this is the one that mattered. Same model, same answers,
-rubric ① vs ③:
+rubric ① vs ③ (measured on the 29-item set, because rubric ① no longer exists in the
+code and re-implementing it would change the instrument under test):
 
 | system | rubric ① | rubric ③ | delta |
 |---|---|---|---|
@@ -190,39 +196,44 @@ reviewer saw question, reference and candidate, never the verdict, never the sys
 
 | metric | value |
 |---|---|
-| exact agreement | 56.7% |
-| usable-vs-not | 66.7% |
-| quadratic-weighted kappa | **0.607** (substantial) |
+| exact agreement | 70.0% |
+| usable-vs-not | 73.3% |
+| quadratic-weighted kappa | **0.816** (almost perfect) |
 
 | system | n | mean human | mean judge |
 |---|---|---|---|
-| closed_book | 15 | **0.100** | 0.267 |
-| hybrid + rerank | 15 | **0.567** | 0.467 |
+| closed_book | 15 | **0.167** | 0.267 |
+| hybrid + rerank | 15 | **0.867** | 0.733 |
 
 **This is the answer to "isn't your judge circular?"** — and it points the
-reassuring way: the judge is *lenient* on vague advice (+0.167) and *strict* on real
-answers (−0.100), so the machine-measured gain is a **lower bound**. On the sampled
-items the human sees +0.467 where the judge sees +0.200.
+reassuring way: the judge is *lenient* on vague advice (+0.100) and *strict* on real
+answers (−0.133), so the machine-measured gain is a **lower bound**. On the sampled
+items the human sees +0.700 (5.2×) where the judge sees +0.466 (2.75×).
 
 Say the caveat before you are asked: one reviewer, 15 per system, one sitting. It
-validates the direction, not the decimal.
+validates the direction, not the decimal. The sample-size experiment points the same
+way: tripling the eval set moved closed_book by only +0.031 while retrieval moved
+by ~0.18, so both independent checks say the measured gain is a floor, not a ceiling.
 
 Three conclusions, and only the first is a keeper in its original form:
 
 1. **Holds everywhere:** retrieval beats closed-book. Every rubric, every judge,
-   every run. 0.190 → about 0.50.
-2. **Withdrawn:** "the reranked system is best". It led by 0.10 under rubric ① and
-   ties or trails under ③. A result that flips when the instrument is corrected was
-   a result about the instrument.
-3. **Narrowed:** the gain. It was "4×", then 1.5×–4.2×, and after the rubric fix it
-   is **1.9×–2.6×** — the interval shrank by more than half because the instrument
-   got better, not because more data arrived.
+   every run, every sample size. 0.221 → about 0.70.
+2. **Withdrawn:** "the reranked system is best". It led by 0.10 under rubric ①, ties
+   or trails under ③, and the ordering flips between judges. A result that flips
+   when the instrument is corrected was a result about the instrument.
+3. **Narrowed, then widened again:** the gain was "4×", then 1.5×–4.2×, then
+   **1.9×–2.6×** after the rubric fix — and after tripling the eval set it is
+   **2.3×–3.2×**. The first move was the instrument getting better; the second was
+   the sample getting big enough to see the effect more clearly. Both directions
+   belong in the story, and reporting the second one is what makes the first one
+   credible.
 
 **Why this is the best thing to lead with in an interview:** anyone can produce a
 4×. Very few candidates will say their number is soft, quantify how soft, discover
 that their own rubric was manufacturing the headline, and then withdraw a claim.
 Expect "so what would you actually claim?" — the answer is: retrieval helps by
-roughly 2×, the four retrieval configurations are indistinguishable, and here is
+**2.3×–3.2×**, the four retrieval configurations are indistinguishable, and here is
 the interval.
 
 **Follow-up you should be ready for:** "why not just use a human?" Because that is
@@ -272,13 +283,13 @@ These are the three things to bring up in an interview, because they are the
 things you can only learn by running the experiment. Numbers are the shipped
 rubric ③.
 
-### 1. Retrieval roughly doubles accuracy and *multiplies* fabrication
+### 1. Retrieval roughly triples accuracy and *multiplies* fabrication
 
 | | closed-book | best retrieval config |
 |---|---|---|
-| correct | 10.3% | 37.9% |
-| accuracy | 0.190 | 0.517 |
-| fabricated | 3.4% | 34.5% |
+| correct | 8.4% | 64.2% |
+| accuracy | 0.221 | 0.700 |
+| fabricated | 1.1% | 20.0% |
 
 The mechanism: without retrieval the model mostly **admits ignorance** — several
 answers said "I don't have reliable knowledge of a Vite 8 release". Those score
@@ -291,59 +302,63 @@ worse per failure and easy to miss if you report one accuracy number.
 two separable problems — grounding and citation fidelity — and that fixing one can
 make the other more visible.
 
-### 2. The four retrieval configurations are indistinguishable — three ways
+### 2. The four retrieval configurations are indistinguishable — four ways
 
-BM25 0.517, hybrid 0.500, rerank 0.500, dense 0.466. That is a 0.05 spread, and
-three independent lines say it is not a ranking:
+BM25 0.700, hybrid 0.695, rerank 0.679, dense 0.632. That is a 0.07 spread, and
+four independent lines say it is not a ranking:
 
-1. **It is smaller than the instrument's own noise.** Same-judge run-to-run is
-   0.01–0.07; rubric swaps move individual systems by up to 0.086.
-2. **The retrieval metrics are degenerate.** `recall@5 = 1.000` and `MRR = 1.000`
-   for every retriever, because the query is the issue title and every document is
-   prefixed with it. All four find the gold document at rank 1, so they can only
-   differ in what the *other* four excerpts are. Leave-one-out collapses to 0.000,
-   confirming each answer lives in exactly one thread.
+1. **It is at or inside the instrument's own noise.** Same-judge run-to-run is
+   0.005–0.026; changing the judge moves systems by up to 0.084 and *flips the
+   ordering* (bm25 first under `deepseek-chat`, rerank first under `deepseek-reasoner`).
+2. **The ordering is not stable across graders**, which is the cheapest possible
+   falsification test and it fails.
 3. **The reranker's lead did not survive a rubric fix.** It won by 0.10 under
    rubric ① and lost it under ③.
+4. **The retriever that retrieves best does not answer best.** On the comment-level
+   metric the reranker leads (0.621 vs BM25's 0.611) while trailing on accuracy
+   (0.679 vs 0.700).
 
 That third point is the one to say out loud, because it is a claim I had to
 withdraw rather than a claim I never made.
 
 **Why this matters:** anyone can report a 1.0. Reporting that your own metric is
-degenerate, explaining the construct, and naming the fix (questions whose answers
-appear in several threads, or paraphrased queries) is what separates measurement
-from marketing.
+degenerate, explaining the construct, and then *replacing* it — the issue-level
+`recall@5` was a tautology (98–99.8% of each window was chunks of the gold issue
+itself, and leave-one-out was zero by definition), so it is now scored on the
+answering comment — is what separates measurement from marketing.
 
-### 3. A quarter of the retrieval answers are summaries, not answers
+### 3. Better retrieval is not the same as better answers
 
-9 of 29 BM25 answers were of the form "this is tracked in issue #21827" rather
-than stating the resolution. The prompt forbids exactly that; it only partly
-worked.
-
-That gap — between "the context contains the answer" and "the model states the
-answer" — is a real product problem, and the fix is either an answer-vs-summary
-classifier or a rewrite pass, not a bigger model.
+The reranker puts the answering comment in the top 5 more often than any other
+retriever (62.1% vs 51.6–61.1%) and still finishes behind BM25 end-to-end. The gap
+between "the context contains the answer" and "the model states the answer" is a
+real product problem, and the fix is an answer-vs-summary check or a rewrite pass,
+not a bigger model.
 
 ---
 
 ## Numbers to have memorised
 
-- 29 eval items, hand-reviewed down from 53 mined candidates
-- 29 eval items, hand-reviewed down from 53 mined candidates
-- 533 issues, 1,097 comments → 3,078 corpus documents
-- closed_book **0.190**; retrieval configurations **0.466–0.517** (shipped rubric ③)
-- gain **1.9×–2.6×** across two judges: +0.268 (reasoner) to +0.322 (chat)
-- `correct` **10.3% → 37.9%**; fabrication **3.4% → 24–38%**
-- on the 26 items closed-book missed: **0.096 → 0.481–0.519**
-- noise floor: same-judge run-to-run 0.005–0.07; a rubric swap moved one system by
-  0.086. Anything under ~0.07 is not a result.
+- **95 eval items**, hand-reviewed down from 200 mined candidates (47.5% keep rate)
+- 771 issues, 2,593 comments → **5,473 corpus documents**
+- closed_book **0.221**; retrieval configurations **0.632–0.700** (shipped rubric ③)
+- gain **2.3×–3.2×** across two judges: 3.17× (chat) vs 2.33× (reasoner)
+- `correct` **8.4% → 64.2%**; fabrication **1.1% → 20–28%**
+- on the 87 items closed-book missed: **0.149 → 0.621–0.678**
+- noise floor: same-judge run-to-run 0.005–0.026; a judge swap moves one system by
+  0.084 and reorders the table. Anything under ~0.03 is not a result.
 - **the reranker's lead was withdrawn** — 0.586 under rubric ①, 0.500 under ③
-- **human blind review: 56.7% exact, κ=0.607, and the judge is lenient on vague
-  advice (+0.167) and strict on good answers (−0.100)** — so the machine numbers
-  understate the gain
-- ~25% of retrieval answers summarise the thread instead of answering
+- **sample size**: 29 → 95 items moved closed_book by only **+0.031** while
+  retrieval moved ~0.18, so the gain grew (2.72× → 3.17×), it did not regress
+- **human blind review: 70.0% exact, κ=0.816, and the judge is lenient on vague
+  advice (+0.100) and strict on good answers (−0.133)** — so the machine numbers
+  understate the gain (human sees 5.2×, judge sees 2.75×)
+- **retrieval metric**: issue-level recall/MRR were 1.000/1.000 for everyone by
+  construction; comment-level gold-chunk@5 is 0.516–0.621 and does rank them
 - 86% of one rejected repo's comment stream was bots (see `docs/DATA_QUALITY.md`)
 
 If an interviewer asks "what did you actually learn?", lead with the instrument
 audit — the rubric manufactured the headline, and finding that out narrowed the
-claim from "4×" to "about 2×" without anyone adding a single data point.
+claim from "4×" to "about 2–3×" without anyone adding a single data point. Then
+follow with the sequel: tripling the sample moved the control barely at all but
+moved the treatment a lot, which is what you want to see and is rarely checked.

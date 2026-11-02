@@ -1,6 +1,6 @@
 # Results — Vite (`vitejs/vite`)
 
-- evaluation items: **29**
+- evaluation items: **95**
 - generator: `deepseek-chat`
 - judge: `deepseek-chat` (same model, greedy decoding)
 - top-k retrieved: 5
@@ -9,33 +9,37 @@
 
 | system | n | errors | accuracy | correct | partial | incorrect | fabricated | cited | p50 s | p95 s |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `closed_book` | 29 | 0 | 0.190 | 10.3% | 17.2% | 72.4% | 3.4% | 0.0% | 4.31 | 4.89 |
-| `bm25` | 29 | 0 | 0.517 | 37.9% | 27.6% | 34.5% | 34.5% | 100.0% | 3.76 | 4.45 |
-| `dense` | 29 | 0 | 0.466 | 27.6% | 37.9% | 34.5% | 24.1% | 100.0% | 3.74 | 4.3 |
-| `hybrid` | 29 | 0 | 0.500 | 37.9% | 24.1% | 37.9% | 37.9% | 100.0% | 3.68 | 3.97 |
-| `hybrid_rerank` | 29 | 0 | 0.500 | 44.8% | 10.3% | 44.8% | 34.5% | 100.0% | 3.92 | 4.29 |
+| `closed_book` | 95 | 0 | 0.221 | 8.4% | 27.4% | 64.2% | 1.1% | 0.0% | 4.32 | 5.0 |
+| `bm25` | 95 | 0 | 0.700 | 64.2% | 11.6% | 24.2% | 20.0% | 100.0% | 3.7 | 4.29 |
+| `dense` | 95 | 0 | 0.632 | 55.8% | 14.7% | 29.5% | 28.4% | 100.0% | 3.65 | 4.29 |
+| `hybrid` | 95 | 0 | 0.695 | 63.2% | 12.6% | 24.2% | 21.1% | 100.0% | 3.53 | 4.19 |
+| `hybrid_rerank` | 95 | 0 | 0.679 | 62.1% | 11.6% | 26.3% | 23.2% | 100.0% | 3.77 | 4.33 |
 
 _accuracy = correct(1.0) + partial(0.5) averaged; fabricated = judge flagged an invented version/API/path; failed calls are counted in `errors` and excluded from accuracy._
 
-## Where retrieval actually matters (n=26)
+## Where retrieval actually matters (n=87)
 
 Restricted to the items the closed-book model got **wrong**. On items the model already answers from memory, retrieval has nothing to add, and including them dilutes the comparison. This is a subgroup of the same run, not a filtered eval set: the closed-book row above still counts every item, so the full table is not cherry-picked.
 
 | system | accuracy | correct | partial | incorrect | fabricated |
 |---|---|---|---|---|---|
-| `closed_book` | 0.096 | 0.0% | 19.2% | 80.8% | 3.8% |
-| `bm25` | 0.481 | 34.6% | 26.9% | 38.5% | 34.6% |
-| `dense` | 0.442 | 26.9% | 34.6% | 38.5% | 26.9% |
-| `hybrid` | 0.519 | 38.5% | 26.9% | 34.6% | 34.6% |
-| `hybrid_rerank` | 0.500 | 46.2% | 7.7% | 46.2% | 34.6% |
+| `closed_book` | 0.149 | 0.0% | 29.9% | 70.1% | 1.1% |
+| `bm25` | 0.678 | 62.1% | 11.5% | 26.4% | 21.8% |
+| `dense` | 0.621 | 54.0% | 16.1% | 29.9% | 28.7% |
+| `hybrid` | 0.672 | 60.9% | 12.6% | 26.4% | 21.8% |
+| `hybrid_rerank` | 0.672 | 60.9% | 12.6% | 26.4% | 24.1% |
 
-## Retrieval (reference issue found in top-5)
+## Retrieval (the maintainer's own comment found in top-5)
 
-| retriever | recall@5 | recall@5 leave-one-out | MRR | MRR LOO |
+Relevance here is the reference **comment**, not the issue it came from. The issue-level version of this table is in Limitations because it is a tautology on this corpus.
+
+| retriever | gold chunk@5 | gold chunk MRR | gold chunk top-1 | share of window from the same issue |
 |---|---|---|---|---|
-| `bm25` | 1.000 | 0.000 | 1.000 | 0.000 |
-| `dense` | 1.000 | 0.000 | 1.000 | 0.000 |
-| `hybrid` | 1.000 | 0.000 | 1.000 | 0.000 |
-| `hybrid_rerank` | 1.000 | 0.000 | 1.000 | 0.000 |
+| `bm25` | 0.611 | 0.280 | 0.116 | 0.983 |
+| `dense` | 0.516 | 0.206 | 0.063 | 0.998 |
+| `hybrid` | 0.579 | 0.247 | 0.084 | 0.996 |
+| `hybrid_rerank` | 0.621 | 0.289 | 0.147 | 0.990 |
 
-_leave-one-out hides the source issue's own documents, so it measures whether the retriever generalises rather than matching the query against itself._
+_gold chunk@5 = the maintainer comment that answers the question appears among the retrieved chunks. The last column is the diagnosis of why the issue-level metric saturates: almost the whole window is chunks of the gold issue itself, so `recall@k` and MRR are 1.000 for every retriever by construction._
+
+_Archived issue-level numbers (recall@5 / leave-one-out / MRR), kept only to show the degradation: `bm25` 1.000/0.000/1.000 · `dense` 1.000/0.000/1.000 · `hybrid` 1.000/0.000/1.000 · `hybrid_rerank` 1.000/0.000/1.000._

@@ -14,6 +14,9 @@ data/cache/
 data/wheels/
 data/models/
 
+# Point-in-time snapshots taken before a corpus-widening rerun (2.5 MB+ each)
+data/backup-*/
+
 # Corpus is a build artifact (megabytes, deterministic from data/raw)
 data/processed/**/corpus.jsonl
 data/processed/**/corpus_stats.json
@@ -34,6 +37,10 @@ data/processed/**/corpus_stats.json
 Thumbs.db
 .idea/
 .vscode/
+
+# Leftover pip build dirs from a cancelled install (ACL-broken, cannot delete)
+pip-*/
+pip-*
 
 # Secrets
 .env

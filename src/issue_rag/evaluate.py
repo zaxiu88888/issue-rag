@@ -89,16 +89,44 @@ def answered_with_citation(answer: str) -> bool:
 def evaluate_retrieval(
     retriever: Any, items: list[dict[str, Any]], top_k: int
 ) -> dict[str, float]:
-    """Recall@k and MRR of the reference issue, with and without self-retrieval."""
+    """Retrieval quality on two different questions, because they differ.
+
+    The original metrics asked "did we find the *issue* the question came from".
+    On this corpus that is close to a tautology: the query is the issue title and
+    every chunk is prefixed with the title, so the gold issue is retrieved at rank
+    1 for every item and every retriever -- measured 1.000 recall@5 and 1.000 MRR
+    for all four retrievers, on 29 items and on 95 items alike. The
+    leave-one-issue-out variant is worse than useless: the reference document is a
+    chunk of the gold issue, so removing that issue from the index removes the only
+    relevant document *by construction* and the score is identically 0.
+
+    So the metrics that actually discriminate are the ones about the reference
+    *comment*:
+
+    * ``gold_chunk@{k}`` -- is the maintainer comment that answers the question
+      among the top-k chunks (a chunk-level hit, not an issue-level one)?
+    * ``gold_chunk_mrr`` / ``gold_chunk_top1`` -- how high does it rank?
+    * ``self_share@{k}`` -- what fraction of the retrieved window comes from the
+      gold issue itself? Near 1.0 means the retriever filled the window with
+      chunks of the same thread, i.e. the window carries almost no cross-thread
+      discrimination. This is the number that explains the saturation above.
+
+    The old issue-level keys are still returned so archived runs stay comparable.
+    """
     hit_with = 0
     hit_without = 0
     rr_with = 0.0
     rr_without = 0.0
+    gold_hit = 0
+    gold_rr = 0.0
+    gold_top1 = 0
+    self_share = 0.0
     counted = 0
 
     for item in items:
         question = item["query"]
         target = item["issue_number"]
+        gold_comments = {str(cid) for cid in item.get("reference_comment_ids") or []}
         hits_with = retriever.search(question, top_k=top_k)
         hits_without = retriever.search(question, top_k=top_k, exclude_issue=target)
         counted += 1
@@ -112,12 +140,29 @@ def evaluate_retrieval(
             hit_without += 1
             rr_without += 1.0 / ranks_without[0]
 
+        if gold_comments:
+            gold_ranks = [
+                i + 1
+                for i, h in enumerate(hits_with)
+                if str((h.metadata or {}).get("comment_id")) in gold_comments
+            ]
+            if gold_ranks:
+                gold_hit += 1
+                gold_rr += 1.0 / gold_ranks[0]
+                gold_top1 += 1 if gold_ranks[0] == 1 else 0
+        if hits_with:
+            self_share += sum(1 for h in hits_with if h.issue_number == target) / len(hits_with)
+
     n = max(counted, 1)
     return {
         f"recall@{top_k}": round(hit_with / n, 4),
         f"recall@{top_k}_loo": round(hit_without / n, 4),
         "mrr": round(rr_with / n, 4),
         "mrr_loo": round(rr_without / n, 4),
+        f"gold_chunk@{top_k}": round(gold_hit / n, 4),
+        "gold_chunk_mrr": round(gold_rr / n, 4),
+        "gold_chunk_top1": round(gold_top1 / n, 4),
+        f"self_share@{top_k}": round(self_share / n, 4),
     }
 
 
@@ -142,6 +187,13 @@ def results_stem(preset: RepoPreset, tag: str = "") -> str:
 
 
 def load_shard(path: Path) -> dict[str, dict[str, Any]]:
+    """Last record per item id, *including* failed ones.
+
+    Failures are kept here on purpose: ``summarise`` counts them and the report
+    prints an ``errors`` column. Dropping them at load time would quietly raise
+    every accuracy figure. Use :func:`finished_ids` to ask which items still
+    need to run.
+    """
     done: dict[str, dict[str, Any]] = {}
     if not path.exists():
         return done
@@ -156,6 +208,23 @@ def load_shard(path: Path) -> dict[str, dict[str, Any]]:
             except (json.JSONDecodeError, KeyError):
                 continue
     return done
+
+
+# Two record shapes are not verdicts and must not count as "done":
+#   * ``error``    -- the API call itself failed (e.g. SSL truncation)
+#   * ``unparsed`` -- the grader emitted no parseable JSON (budget exhausted)
+# Caching either as done makes resume skip the item forever, so n silently
+# stops short of the eval-set size and only the errors column would hint at it.
+INCOMPLETE_VERDICTS = frozenset({"error", "unparsed"})
+
+
+def finished_ids(records: dict[str, dict[str, Any]]) -> set[str]:
+    """Item ids whose last record is a real verdict, i.e. safe to skip."""
+    return {
+        item_id
+        for item_id, record in records.items()
+        if record.get("verdict") not in INCOMPLETE_VERDICTS and not record.get("error")
+    }
 
 
 def run_system(
@@ -181,15 +250,19 @@ def run_system(
 
     shard = shard_path(preset, system, getattr(args, "run_tag", ""))
     done = load_shard(shard)
+    finished = finished_ids(done)
     valid_ids = {item["id"] for item in items}
-    already = len(valid_ids & set(done))
+    already = len(valid_ids & finished)
+    failed = len(valid_ids & set(done) - finished)
     print(f"\n[{system}] resuming with {already}/{len(items)} items done")
+    if failed:
+        print(f"  {failed} recorded failure(s) will be retried, not skipped")
 
     with shard.open("a", encoding="utf-8") as handle:
         for position, item in enumerate(items, start=1):
-            if item["id"] in done:
+            if item["id"] in finished:
                 continue
-            started = time.time()
+            started = time.perf_counter()
             hits = retriever.search(item["query"], top_k=args.top_k) if retriever else []
             context = build_context(hits) if hits else ""
 
@@ -231,15 +304,15 @@ def run_system(
                     "context_doc_ids": [h.doc_id for h in hits],
                     "context_issues": [h.issue_number for h in hits],
                     "generated_tokens": 0,
-                    "latency_s": round(time.time() - started, 2),
-                    "wall_s": round(time.time() - started, 2),
+                    "latency_s": round(time.perf_counter() - started, 2),
+                    "wall_s": round(time.perf_counter() - started, 2),
                     "error": str(exc)[:300],
                 }
                 handle.write(json.dumps(record, ensure_ascii=False) + "\n")
                 handle.flush()
                 print(
                     f"  {position:>3}/{len(items)} {item['id']:<10} "
-                    f"{'ERROR':<9} {time.time() - started:5.1f}s  {str(exc)[:60]!r}"
+                    f"{'ERROR':<9} {time.perf_counter() - started:5.1f}s  {str(exc)[:60]!r}"
                 )
                 continue
 
@@ -260,7 +333,7 @@ def run_system(
                 "context_issues": [h.issue_number for h in hits],
                 "generated_tokens": generation.output_tokens,
                 "latency_s": round(generation.latency_s, 2),
-                "wall_s": round(time.time() - started, 2),
+                "wall_s": round(time.perf_counter() - started, 2),
             }
             handle.write(json.dumps(record, ensure_ascii=False) + "\n")
             handle.flush()
@@ -329,16 +402,13 @@ def regrade_system(
     """
     base = load_shard(shard_path(preset, system, args.regrade_from))
     target = shard_path(preset, system, args.run_tag)
+    # Same rule as the generation path: only a real verdict counts as done.
     # "unparsed" means the grader emitted no parseable JSON -- usually a reasoning
-    # model whose trace consumed the whole budget. That is a failure, not a
-    # verdict, so it must not be cached as done: a rerun with a larger
-    # --judge-max-tokens should retry it. Re-appending is safe because load_shard
-    # keys by item_id and keeps the last record.
-    done = {
-        iid: rec
-        for iid, rec in load_shard(target).items()
-        if rec.get("verdict") != "unparsed"
-    }
+    # model whose trace consumed the whole budget -- and "error" means the call
+    # failed outright. Neither is a verdict, so a rerun should retry them.
+    # Re-appending is safe because load_shard keys by item_id and keeps the last
+    # record, so a later success supersedes the earlier failure.
+    finished = finished_ids(load_shard(target))
     source_label = args.regrade_from or "untagged"
     print(
         f"\n[{system}] re-grading from '{source_label}' with {judge.model.name} "
@@ -347,7 +417,7 @@ def regrade_system(
 
     with target.open("a", encoding="utf-8") as handle:
         for position, item in enumerate(items, start=1):
-            if item["id"] in done:
+            if item["id"] in finished:
                 continue
             source = base.get(item["id"])
             if source is None or source.get("error"):
@@ -414,9 +484,15 @@ def write_report(
     lines.append(f"- evaluation items: **{n_items}**")
     generator = getattr(args, "resolved_model", None) or args.model or args.local_model
     judge_name = getattr(args, "resolved_judge", None) or generator
-    lines.append(f"- generator: `{generator}`")
-    same = " (same model, greedy decoding)" if judge_name == generator else ""
-    lines.append(f"- judge: `{judge_name}`{same}")
+    if getattr(args, "retrieval_only", False):
+        # No model was called, so printing one would be a fabricated provenance
+        # line -- exactly the kind of quiet lie the rest of this repo guards against.
+        lines.append("- generator: _not used (retrieval-only run)_")
+        lines.append("- judge: _not used (retrieval-only run)_")
+    else:
+        lines.append(f"- generator: `{generator}`")
+        same = " (same model, greedy decoding)" if judge_name == generator else ""
+        lines.append(f"- judge: `{judge_name}`{same}")
     lines.append(f"- top-k retrieved: {args.top_k}")
     lines.append("")
 
@@ -468,22 +544,40 @@ def write_report(
         lines.append("")
 
     if retrieval:
-        lines.append(f"## Retrieval (reference issue found in top-{args.top_k})\n")
+        k = args.top_k
+        lines.append(f"## Retrieval (the maintainer's own comment found in top-{k})\n")
         lines.append(
-            f"| retriever | recall@{args.top_k} | recall@{args.top_k} leave-one-out | MRR | MRR LOO |"
+            "Relevance here is the reference **comment**, not the issue it came "
+            "from. The issue-level version of this table is in Limitations "
+            "because it is a tautology on this corpus.\n"
+        )
+        lines.append(
+            f"| retriever | gold chunk@{k} | gold chunk MRR | gold chunk top-1 | "
+            f"share of window from the same issue |"
         )
         lines.append("|---|---|---|---|---|")
         for name, metrics in retrieval.items():
             lines.append(
-                f"| `{name}` | {metrics[f'recall@{args.top_k}']:.3f} | "
-                f"{metrics[f'recall@{args.top_k}_loo']:.3f} | {metrics['mrr']:.3f} | "
-                f"{metrics['mrr_loo']:.3f} |"
+                f"| `{name}` | {metrics[f'gold_chunk@{k}']:.3f} | "
+                f"{metrics['gold_chunk_mrr']:.3f} | {metrics['gold_chunk_top1']:.3f} | "
+                f"{metrics[f'self_share@{k}']:.3f} |"
             )
         lines.append("")
         lines.append(
-            "_leave-one-out hides the source issue's own documents, so it measures "
-            "whether the retriever generalises rather than matching the query "
-            "against itself._\n"
+            f"_gold chunk@{k} = the maintainer comment that answers the question "
+            "appears among the retrieved chunks. The last column is the diagnosis "
+            "of why the issue-level metric saturates: almost the whole window is "
+            "chunks of the gold issue itself, so `recall@k` and MRR are 1.000 for "
+            "every retriever by construction._\n"
+        )
+        lines.append(
+            f"_Archived issue-level numbers (recall@{k} / leave-one-out / MRR), "
+            "kept only to show the degradation: "
+            + " · ".join(
+                f"`{name}` {m[f'recall@{k}']:.3f}/{m[f'recall@{k}_loo']:.3f}/{m['mrr']:.3f}"
+                for name, m in retrieval.items()
+            )
+            + "._\n"
         )
 
     path = RESULTS_DIR / f"{results_stem(preset, getattr(args, 'run_tag', ''))}.md"

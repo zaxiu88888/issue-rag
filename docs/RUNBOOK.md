@@ -10,33 +10,35 @@ below exist purely because of the failures documented there.
 
 | stage | state |
 |---|---|
-| harvest client (cache, quota, retry, gzip) | done |
-| issue + comment harvest | done: 533 issues, 1,097 comments for `vite` |
-| corpus build (chunking, bot filter, title prefix) | done: 3,078 documents |
-| eval-set mining + human review sheet | done: 53 candidates → **29 kept** |
+| harvest client (cache, quota, retry, gzip) | done; `GITHUB_TOKEN` is now actually read (it was silently ignored before) |
+| issue + comment harvest | done: **771 issues, 2,593 comments** for `vite` (18-month window) |
+| corpus build (chunking, bot filter, title prefix) | done: **5,473 documents** |
+| eval-set mining + human review sheet | done: 200 candidates → **95 kept** (47.5%) |
 | retrieval (BM25 / dense / RRF / rerank) | done, all four configurations run |
-| generation + judge + results report | done via `--provider deepseek` |
-| generator timeouts and retries | done: 3 attempts with backoff; failures recorded, not hidden |
-| cross-model judge check + sensitivity analysis | done: gain is **1.9×–2.6×**, ranking stable |
-| blind human review | **done**: 30 pairs, 56.7% exact, κ=0.607 |
-| unit tests | 64 passing |
+| generation + judge + results report | done via `--provider deepseek`, 5 systems × 95 items, 0 failed calls |
+| generator timeouts and retries | done: 5 attempts with 2/4/8/16 s backoff; SSL truncation is retryable |
+| cross-model judge check + sensitivity analysis | done: gain is **2.3×–3.2×**, ordering **not** stable across judges |
+| blind human review | **done**: 30 pairs, **70.0% exact, κ=0.816**, judge understating the gain |
+| retrieval metric | **replaced**: issue-level recall was a tautology → comment-level `gold_chunk@5` |
+| unit tests | **70 passing** |
 | CI | configured |
 
 Everything in the results table has been run end to end. What is *not* done needs
 a person, not code:
 
-- **29 eval items is small.** Every metric prints `n` for this reason. Reaching
-  80–120 needs a GitHub token (minutes) or several quiet hours of anonymous
-  quota. Note that the anonymous quota is per **IP**, so any other tool on the
-  same network competes for it — that happened during this session and stalled the
-  expansion twice.
+- **Eval set now meets the 80–120 target** (95 items). It got there only after
+  fixing `fetch.py`, which never called `load_env_file()` — the token sat in `.env`
+  and every harvest silently ran on the 60/hour anonymous budget.
 - **Human review coverage, not absence.** A blind review of 30 pairs is done
-  (56.7% exact, κ=0.607) and it shows the judge understating the gain. What it does
-  not show is a precise estimate: one reviewer, 15 items per system, one sitting.
-  More reviewers and more items would tighten it — that is now a sampling question,
-  which is the same bottleneck as the eval-set size.
-- **The reranker's edge needs a second dataset.** It is the only retrieval row
-  that moves, and three items is not enough.
+  (70.0% exact, κ=0.816) and it shows the judge understating the gain by ~0.1 in
+  both directions. What it does not show is a precise estimate: one reviewer, 15
+  items per system, one sitting. More reviewers would tighten it.
+- **The reranker's edge needs a second dataset.** Its retrieval quality is now
+  measurable (0.621 vs 0.611 for BM25) but its answer accuracy is not better, and
+  the ordering flips when the judge changes. Do not claim it.
+- **Paraphrased queries.** With the comment-level metric in place, the lexical
+  advantage of title-as-query is now measurable rather than hidden. Building a
+  paraphrase set is the next real experiment.
 
 ---
 
@@ -54,8 +56,15 @@ A fine-grained token with **public repository read-only** access is enough. Put
 it in `GITHUB_TOKEN` and rerun the same command; every already-cached page is
 free, so nothing is re-downloaded.
 
+> **Check this first:** `fetch.py` must print `loaded from .env: ... GITHUB_TOKEN`
+> and `quota: authenticated: core 4xxx/5000`. If it says `anonymous: 45/60` the token
+> is not being read and the harvest will crawl. That exact bug shipped once: the
+> token was in `.env` for a day while every harvest silently ran on the 60/hour
+> anonymous budget, which is why the eval set stayed at 29 items.
+
 ```bash
-python -m issue_rag.fetch comments --preset vite --mode per-issue --max-comment-issues 120
+python -m issue_rag.fetch issues   --preset vite --months 18
+python -m issue_rag.fetch comments --preset vite --mode per-issue --max-comment-issues 300
 ```
 
 Re-running is safe and resumable. Stop and restart as often as you like.
@@ -88,7 +97,10 @@ thread you do not have.
 
 **Target 80–120 kept items.** Fewer than 50 and the confidence intervals are too
 wide to claim anything; the report prints `n` next to every metric for that
-reason.
+reason. The current set is **95 kept out of 200 reviewed (47.5%)**, mined from
+771 issues with an 18-month window. Keep rate is a useful sanity number: if it
+collapses (say below 30%) the mining window is probably pulling in threads the
+maintainers never actually resolved, and widening `--months` further will not help.
 
 Then:
 
@@ -224,13 +236,14 @@ Three gotchas, all learned the hard way:
   `--regrade` retries `unparsed` records on a rerun rather than caching them as done.
 - **Report the sensitivity, not just the agreement.** In this project the reported
   gain moved from 4.2× to 2.6× purely by correcting the rubric, and the
-  cross-judge interval is 1.9×–2.6×. An agreement percentage on its own would have
-  hidden both.
+  cross-judge interval on the 95-item set is **2.3×–3.2×**. An agreement percentage
+  on its own would have hidden both.
 - **Measure the grader against itself, because it is stochastic.** A run with the
-  *same* model disagrees with the previous one on 7–29% of verdicts, which was worth
-  about 0.07 accuracy under the original rubric and about 0.01 under the shipped
-  one. That number is the floor: any difference between two systems smaller than it
-  is not a result. Run it with the committed tool, no extra code:
+  *same* model disagrees with the previous one on 79–86% of items it agrees on, i.e.
+  13–21% of verdicts move, which is worth 0.005–0.026 accuracy on the reported
+  aggregate under the shipped rubric (and about 0.07 under the original one). That
+  number is the floor: any difference between two systems smaller than it is not a
+  result. Run it with the committed tool, no extra code:
 
   ```bash
   make regrade    VARIANT=reasoner2 VARIANT_MODEL=deepseek-reasoner
@@ -242,14 +255,19 @@ Three gotchas, all learned the hard way:
 
 - **Do not claim a ranking that flips inside the noise band.** Here `bm25`, `hybrid`
   and `dense` swap places between graders while sitting within 0.07 of each other;
-  the honest report says "unresolved". Only the extremes (closed-book worst, the
-  reranked system best) survive all three runs.
+  the honest report says "unresolved". Only the extremes (closed-book worst under
+  every grader) survive. Note that even the "reranked system best" half of that
+  sentence died once the sample grew: it leads under `deepseek-reasoner` (0.711) and
+  trails `bm25` under `deepseek-chat` (0.679 vs 0.700).
 
 **b) Human review — done once, worth repeating on a larger sample.** This is the
 only step that measures whether the grader is *right* rather than merely
-*reproducible*. The first pass is committed: 30 pairs, 56.7% exact agreement,
-quadratic-weighted κ=0.607, and a consistent directional bias (the judge is lenient
-on vague advice by 0.167 and strict on retrieval answers by 0.100).
+*reproducible*. Two passes are committed: 30 pairs each. The current one (95-item
+eval set) gives **70.0% exact agreement, quadratic-weighted κ=0.816**, and the same
+directional bias, larger: the judge is lenient on vague advice by 0.100 and strict on
+retrieval answers by 0.133. The first pass (29-item set) gave 56.7% / κ=0.607, and is
+kept as human_review_v1.jsonl — the agreement improved because the eval set got
+less ambiguous, not because the judge changed.
 
 ```bash
 make human-queue      # sample 30 graded answers (deterministic, seeded)
@@ -295,8 +313,9 @@ Version ② is the example to remember: it raised per-item agreement to 93% whil
 collapsing every score, because 97% of answers were flagged as fabricating. A
 reproducible grader that is wrong is worse than a noisy one that is roughly right.
 
-**Consequence for you:** the numbers in `README.md` and `data/results/*` were
-produced by rubric ①. The repo ships ③. Do not mix them:
+**Consequence for you:** the archived 29-item arms (`*__v1_29items.jsonl`,
+`v1holistic`) were produced by rubric ①; everything in `README.md` today is rubric
+③. Do not mix them:
 
 ```bash
 # re-baseline under the shipped rubric, then re-run the comparison
@@ -306,9 +325,10 @@ make sensitivity VARIANT=reasoner
 ```
 
 That is roughly 8 minutes and ~¥1 for the baseline, and it is a prerequisite for
-publishing any new number. On the two systems measured, rubric ③ moves
+publishing any new number. On the two systems measured, rubric ③ moved
 closed_book 0.336 → 0.287 and the reranked system 0.517 → 0.562, i.e. the gain
-slightly **increases**.
+slightly **increases**. On the current 95-item set those two systems sit at
+0.221 / 0.679 under `deepseek-chat` and 0.305 / 0.711 under `deepseek-reasoner`.
 
 **How to tell a rubric change helped:** not by agreement alone. Check three
 things — run-to-run Δ on the reported aggregate, the level itself, and which

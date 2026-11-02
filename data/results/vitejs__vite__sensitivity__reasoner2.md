@@ -10,30 +10,28 @@
 
 | system | n | dropped | `deepseek-reasoner [reasoner]` | `deepseek-reasoner [reasoner2]` | delta |
 |---|---|---|---|---|---|
-| `closed_book` | 29 | 0 | 0.328 | 0.345 | +0.017 |
-| `bm25` | 29 | 0 | 0.414 | 0.397 | -0.017 |
-| `dense` | 28 | 1 | 0.339 | 0.375 | +0.036 |
-| `hybrid` | 29 | 0 | 0.466 | 0.431 | -0.035 |
-| `hybrid_rerank` | 29 | 0 | 0.483 | 0.552 | +0.069 |
-
-_1 item(s) across all systems were dropped because one side lacked a usable verdict (a failed call, or a grader that emitted no parseable JSON). They are excluded rather than scored, because a grader failure is not a wrong answer._
+| `closed_book` | 95 | 0 | 0.305 | 0.289 | -0.016 |
+| `bm25` | 95 | 0 | 0.658 | 0.668 | +0.011 |
+| `dense` | 95 | 0 | 0.595 | 0.621 | +0.026 |
+| `hybrid` | 95 | 0 | 0.668 | 0.684 | +0.016 |
+| `hybrid_rerank` | 95 | 0 | 0.711 | 0.705 | -0.005 |
 
 ## Do the two graders agree?
 
 | system | n | exact | binary (usable vs not) |
 |---|---|---|---|
-| `closed_book` | 29 | 75.9% | 75.9% |
-| `bm25` | 29 | 79.3% | 89.7% |
-| `dense` | 28 | 71.4% | 75.0% |
-| `hybrid` | 29 | 93.1% | 93.1% |
-| `hybrid_rerank` | 29 | 82.8% | 86.2% |
+| `closed_book` | 95 | 78.9% | 78.9% |
+| `bm25` | 95 | 86.3% | 93.7% |
+| `dense` | 95 | 84.2% | 90.5% |
+| `hybrid` | 95 | 86.3% | 90.5% |
+| `hybrid_rerank` | 95 | 80.0% | 89.5% |
 
 ## The claim that survives, and the one that does not
 
 Best retrieval system by baseline accuracy: `hybrid_rerank`.
 
-- gain under `deepseek-reasoner [reasoner]`: **+0.155** (0.328 -> 0.483)
-- gain under `deepseek-reasoner [reasoner2]`: **+0.207** (0.345 -> 0.552)
+- gain under `deepseek-reasoner [reasoner]`: **+0.405** (0.305 -> 0.711)
+- gain under `deepseek-reasoner [reasoner2]`: **+0.416** (0.289 -> 0.705)
 
 **Ranking stability**: identical under both graders.
 
@@ -47,8 +45,8 @@ So the defensible claims are exactly those two, plus the gain interval. Any orde
 
 ## Verdict transitions
 
-- `closed_book`: incorrect -> partial (4), partial -> incorrect (3)
-- `bm25`: correct -> partial (3), incorrect -> correct (1), incorrect -> partial (1), partial -> incorrect (1)
-- `dense`: incorrect -> partial (4), partial -> incorrect (3), partial -> correct (1)
-- `hybrid`: partial -> incorrect (2)
-- `hybrid_rerank`: incorrect -> partial (2), partial -> correct (1), partial -> incorrect (1), incorrect -> correct (1)
+- `closed_book`: partial -> incorrect (12), incorrect -> partial (7), incorrect -> correct (1)
+- `bm25`: partial -> correct (5), incorrect -> partial (3), correct -> partial (2), partial -> incorrect (2), correct -> incorrect (1)
+- `dense`: partial -> correct (5), incorrect -> partial (4), partial -> incorrect (3), correct -> incorrect (1), correct -> partial (1), incorrect -> correct (1)
+- `hybrid`: incorrect -> partial (7), correct -> partial (3), partial -> incorrect (2), partial -> correct (1)
+- `hybrid_rerank`: partial -> correct (5), partial -> incorrect (5), correct -> partial (4), incorrect -> partial (3), incorrect -> correct (1), correct -> incorrect (1)

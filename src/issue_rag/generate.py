@@ -95,10 +95,14 @@ class LocalChatModel:
         if do_sample:
             gen_kwargs["temperature"] = temperature
 
-        started = time.time()
+        # perf_counter, not time.time: this host's clock has been observed to jump
+        # by hours mid-run, which turned a 4-second call into a recorded 7500-second
+        # one and poisoned the latency p95 in the report. Latency must be measured
+        # on a monotonic clock; wall-clock timestamps are for logs, not for metrics.
+        started = time.perf_counter()
         with torch.inference_mode():
             output = self.model.generate(**inputs, **gen_kwargs)
-        latency = time.time() - started
+        latency = time.perf_counter() - started
 
         generated = output[0][prompt_tokens:]
         text = self.tokenizer.decode(generated, skip_special_tokens=True).strip()
@@ -123,7 +127,7 @@ class OpenAICompatChatModel:
         model: str,
         api_key: str = "not-needed",
         timeout_s: int = 120,
-        max_attempts: int = 3,
+        max_attempts: int = 5,
         retry_backoff_s: float = 2.0,
     ) -> None:
         self.name = model
@@ -139,9 +143,9 @@ class OpenAICompatChatModel:
         max_new_tokens: int = 512,
         temperature: float = 0.0,
     ) -> GenerationResult:
-        started = time.time()
+        started = time.perf_counter()
         body = self._post_with_retry(messages, max_new_tokens, temperature)
-        latency = time.time() - started
+        latency = time.perf_counter() - started
         usage = body.get("usage") or {}
         return GenerationResult(
             text=(body["choices"][0]["message"]["content"] or "").strip(),
@@ -163,9 +167,18 @@ class OpenAICompatChatModel:
         so this bounds the whole attempt with a wall-clock deadline and retries
         with exponential backoff. 4xx other than 429 are raised immediately:
         retrying a bad request just wastes the caller's time and quota.
+
+        TLS truncation counts as transient here. On this host HTTPS is
+        intercepted by an inspection proxy, which drops long-lived connections
+        mid-body; the failure shows up as
+        ``[SSL: UNEXPECTED_EOF_WHILE_READING]`` and it is worth retrying longer
+        than a plain error, which is why the default is 5 attempts (2/4/8/16s).
+        Three attempts -- 6s of total backoff -- was measurably not enough: 12
+        of 95 closed-book calls still failed.
         """
         import http.client
         import json
+        import ssl
         import urllib.error
         import urllib.request
 
@@ -208,7 +221,11 @@ class OpenAICompatChatModel:
                 ConnectionError,
                 TimeoutError,
                 OSError,
+                ssl.SSLError,
             ) as exc:
+                # ssl.SSLError is already an OSError, but naming it keeps the
+                # intent legible: TLS truncation is the failure this host
+                # actually produces, and it must never be treated as fatal.
                 last_error = exc
 
             if attempt < self.max_attempts:

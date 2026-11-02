@@ -4,72 +4,82 @@
   "variant_judge": "deepseek-reasoner",
   "systems": {
     "closed_book": {
-      "n": 29,
+      "n": 95,
       "dropped": 0,
-      "baseline_accuracy": 0.3276,
-      "variant_accuracy": 0.3448,
-      "delta": 0.0172,
-      "exact_agreement": 75.9,
-      "binary_agreement": 75.9,
+      "baseline_accuracy": 0.3053,
+      "variant_accuracy": 0.2895,
+      "delta": -0.0158,
+      "exact_agreement": 78.9,
+      "binary_agreement": 78.9,
       "verdict_transitions": {
-        "incorrect -> partial": 4,
-        "partial -> incorrect": 3
+        "partial -> incorrect": 12,
+        "incorrect -> partial": 7,
+        "incorrect -> correct": 1
       }
     },
     "bm25": {
-      "n": 29,
+      "n": 95,
       "dropped": 0,
-      "baseline_accuracy": 0.4138,
-      "variant_accuracy": 0.3966,
-      "delta": -0.0172,
-      "exact_agreement": 79.3,
-      "binary_agreement": 89.7,
+      "baseline_accuracy": 0.6579,
+      "variant_accuracy": 0.6684,
+      "delta": 0.0105,
+      "exact_agreement": 86.3,
+      "binary_agreement": 93.7,
       "verdict_transitions": {
-        "correct -> partial": 3,
-        "incorrect -> correct": 1,
-        "incorrect -> partial": 1,
-        "partial -> incorrect": 1
+        "partial -> correct": 5,
+        "incorrect -> partial": 3,
+        "correct -> partial": 2,
+        "partial -> incorrect": 2,
+        "correct -> incorrect": 1
       }
     },
     "dense": {
-      "n": 28,
-      "dropped": 1,
-      "baseline_accuracy": 0.3393,
-      "variant_accuracy": 0.375,
-      "delta": 0.0357,
-      "exact_agreement": 71.4,
-      "binary_agreement": 75.0,
+      "n": 95,
+      "dropped": 0,
+      "baseline_accuracy": 0.5947,
+      "variant_accuracy": 0.6211,
+      "delta": 0.0263,
+      "exact_agreement": 84.2,
+      "binary_agreement": 90.5,
       "verdict_transitions": {
+        "partial -> correct": 5,
         "incorrect -> partial": 4,
         "partial -> incorrect": 3,
-        "partial -> correct": 1
+        "correct -> incorrect": 1,
+        "correct -> partial": 1,
+        "incorrect -> correct": 1
       }
     },
     "hybrid": {
-      "n": 29,
+      "n": 95,
       "dropped": 0,
-      "baseline_accuracy": 0.4655,
-      "variant_accuracy": 0.431,
-      "delta": -0.0345,
-      "exact_agreement": 93.1,
-      "binary_agreement": 93.1,
+      "baseline_accuracy": 0.6684,
+      "variant_accuracy": 0.6842,
+      "delta": 0.0158,
+      "exact_agreement": 86.3,
+      "binary_agreement": 90.5,
       "verdict_transitions": {
-        "partial -> incorrect": 2
+        "incorrect -> partial": 7,
+        "correct -> partial": 3,
+        "partial -> incorrect": 2,
+        "partial -> correct": 1
       }
     },
     "hybrid_rerank": {
-      "n": 29,
+      "n": 95,
       "dropped": 0,
-      "baseline_accuracy": 0.4828,
-      "variant_accuracy": 0.5517,
-      "delta": 0.069,
-      "exact_agreement": 82.8,
-      "binary_agreement": 86.2,
+      "baseline_accuracy": 0.7105,
+      "variant_accuracy": 0.7053,
+      "delta": -0.0053,
+      "exact_agreement": 80.0,
+      "binary_agreement": 89.5,
       "verdict_transitions": {
-        "incorrect -> partial": 2,
-        "partial -> correct": 1,
-        "partial -> incorrect": 1,
-        "incorrect -> correct": 1
+        "partial -> correct": 5,
+        "partial -> incorrect": 5,
+        "correct -> partial": 4,
+        "incorrect -> partial": 3,
+        "incorrect -> correct": 1,
+        "correct -> incorrect": 1
       }
     }
   },

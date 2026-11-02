@@ -1,6 +1,6 @@
 # Results — Vite (`vitejs/vite`)
 
-- evaluation items: **29**
+- evaluation items: **95**
 - generator: `reused from the untagged run`
 - judge: `deepseek-reasoner`
 - top-k retrieved: 5
@@ -9,10 +9,10 @@
 
 | system | n | errors | accuracy | correct | partial | incorrect | fabricated | cited | p50 s | p95 s |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `closed_book` | 29 | 0 | 0.345 | 3.4% | 62.1% | 34.5% | 20.7% | 0.0% | 4.31 | 4.89 |
-| `bm25` | 29 | 0 | 0.397 | 24.1% | 31.0% | 44.8% | 44.8% | 100.0% | 3.76 | 4.45 |
-| `dense` | 29 | 0 | 0.362 | 20.7% | 31.0% | 44.8% | 37.9% | 100.0% | 3.74 | 4.3 |
-| `hybrid` | 29 | 0 | 0.431 | 27.6% | 31.0% | 41.4% | 34.5% | 100.0% | 3.68 | 3.97 |
-| `hybrid_rerank` | 29 | 0 | 0.552 | 41.4% | 27.6% | 31.0% | 31.0% | 100.0% | 3.92 | 4.29 |
+| `closed_book` | 95 | 0 | 0.289 | 8.4% | 41.1% | 50.5% | 3.2% | 0.0% | 4.32 | 5.0 |
+| `bm25` | 95 | 0 | 0.668 | 58.9% | 15.8% | 25.3% | 22.1% | 100.0% | 3.7 | 4.29 |
+| `dense` | 95 | 0 | 0.621 | 52.6% | 18.9% | 28.4% | 22.1% | 100.0% | 3.65 | 4.29 |
+| `hybrid` | 95 | 0 | 0.684 | 57.9% | 21.1% | 21.1% | 15.8% | 100.0% | 3.53 | 4.19 |
+| `hybrid_rerank` | 95 | 0 | 0.705 | 61.1% | 18.9% | 20.0% | 16.8% | 100.0% | 3.77 | 4.33 |
 
 _accuracy = correct(1.0) + partial(0.5) averaged; fabricated = judge flagged an invented version/API/path; failed calls are counted in `errors` and excluded from accuracy._

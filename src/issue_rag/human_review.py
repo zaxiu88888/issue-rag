@@ -1,4 +1,4 @@
-﻿"""Blind human review of a sample of graded answers.
+"""Blind human review of a sample of graded answers.
 
 Why this module exists
 ----------------------
@@ -39,6 +39,7 @@ advice that would apply to any project.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import random
 import textwrap
@@ -402,7 +403,7 @@ PAGE = """<!doctype html>
 <script>
 const QUEUE = /*QUEUE_START*/{queue}/*QUEUE_END*/;
 let cursor = 0;
-const decisions = JSON.parse(localStorage.getItem("issueRagDecisions") || "{{}}");
+const decisions = JSON.parse(localStorage.getItem("{storage_key}") || "{{}}");
 
 function pending() {{ return QUEUE.filter(e => !decisions[e.key]); }}
 
@@ -444,7 +445,7 @@ async function judge(verdict) {{
   if (!e) return;
   const note = (document.getElementById("note") || {{}}).value || "";
   decisions[e.key] = {{ verdict, note }};
-  localStorage.setItem("issueRagDecisions", JSON.stringify(decisions));
+  localStorage.setItem("{storage_key}", JSON.stringify(decisions));
   render();
   try {{
     await fetch("/decide", {{
@@ -463,7 +464,7 @@ function skip() {{
   const e = pending()[0];
   if (!e) return;
   decisions[e.key] = {{ verdict: "skip", note: "" }};
-  localStorage.setItem("issueRagDecisions", JSON.stringify(decisions));
+  localStorage.setItem("{storage_key}", JSON.stringify(decisions));
   render();
 }}
 
@@ -491,6 +492,12 @@ def _page_for(queue: list[dict[str, Any]]) -> str:
     rather than by ``review_id``, because that id embeds the system name
     (``closed_book:q12``) and a reviewer reading the page source would learn which
     system produced each answer.
+
+    The localStorage key carries a fingerprint of *this* queue. Without it the
+    browser keeps the previous batch's decisions, and because entries are keyed by
+    a bare index the new queue inherits them wholesale -- the page then opens
+    claiming all 30 items are already graded. A stale review is worse than no
+    review, so switching batches must switch the key.
     """
     public = [
         {
@@ -502,7 +509,15 @@ def _page_for(queue: list[dict[str, Any]]) -> str:
         }
         for index, entry in enumerate(queue)
     ]
-    return PAGE.format(total=len(public), queue=json.dumps(public, ensure_ascii=False))
+    # Hash the identifiers only: the digest must never spell out a system name.
+    digest = hashlib.sha1(
+        "\n".join(f"{e['review_id']}\t{e['item_id']}" for e in queue).encode("utf-8")
+    ).hexdigest()[:12]
+    return PAGE.format(
+        total=len(public),
+        queue=json.dumps(public, ensure_ascii=False),
+        storage_key=f"issueRagDecisions:{digest}",
+    )
 
 
 def serve(

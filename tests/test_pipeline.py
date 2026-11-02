@@ -1,4 +1,4 @@
-﻿"""Unit tests for the parts that can run with no network, GPU, or model weights.
+"""Unit tests for the parts that can run with no network, GPU, or model weights.
 
 The heavy stages (harvest, embed, generate) are not covered here on purpose:
 they are expensive and flaky to test hermetically. What *is* covered is every
@@ -360,6 +360,44 @@ def test_load_env_file_does_not_override_existing(monkeypatch):
         shutil.rmtree(work, ignore_errors=True)
 
 
+def test_fetch_reads_the_token_from_env_file_before_building_the_client(monkeypatch):
+    """Regression: a docs-visible credential has to actually be read.
+
+    ``GITHUB_TOKEN`` lives in ``.env`` exactly like ``DEEPSEEK_API_KEY``, but the
+    fetch stage was the one entry point that never called ``load_env_file``. A
+    token sitting in ``.env`` was therefore ignored and every harvest silently
+    ran on the 60/hour anonymous budget -- which is what made widening the
+    corpus look impossible. Pin the ordering, not just the call.
+    """
+    from issue_rag import fetch as fetch_mod
+
+    calls: list[str] = []
+
+    def fake_load_env_file(*args, **kwargs):
+        calls.append("env")
+        return ["GITHUB_TOKEN"]
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs):
+            calls.append("client")
+            self.stats = type("S", (), {"requests": 0, "cache_hits": 0})()
+
+        def describe_quota(self):
+            return "authenticated: core 5000/5000"
+
+    monkeypatch.setattr(fetch_mod, "load_env_file", fake_load_env_file)
+    monkeypatch.setattr(fetch_mod, "GitHubClient", FakeClient)
+    monkeypatch.setattr(fetch_mod, "harvest_issues", lambda *a, **k: None)
+
+    rc = fetch_mod.main(["issues", "--preset", "vite"])
+
+    assert rc == 0
+    assert calls == ["env", "client"], (
+        "the .env token must be loaded strictly before the client reads the "
+        f"environment, got {calls}"
+    )
+
+
 # ------------------------------------------------------- generator resilience
 
 
@@ -475,6 +513,45 @@ def test_openai_compat_does_not_retry_a_bad_request(monkeypatch):
     assert calls["n"] == 1, "4xx must not be retried"
 
 
+def test_openai_compat_retries_tls_truncation(monkeypatch):
+    """HTTPS here goes through an inspection proxy that drops connections.
+
+    The failure surfaces as ``[SSL: UNEXPECTED_EOF_WHILE_READING]``, either
+    wrapped in ``URLError`` or raised raw from the ssl layer. Both shapes are
+    transient and must be retried; treating them as fatal is what left 12 of 95
+    closed-book items with no answer last run.
+    """
+    import ssl
+    import urllib.error
+    import urllib.request
+
+    from issue_rag.generate import OpenAICompatChatModel
+
+    calls = {"n": 0}
+
+    def flaky(req, timeout=None):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise urllib.error.URLError(ssl.SSLEOFError(8, "EOF in violation of protocol"))
+        if calls["n"] == 2:
+            raise ssl.SSLEOFError(8, "EOF occurred in violation of protocol")
+        return _FakeResponse()
+
+    monkeypatch.setattr(urllib.request, "urlopen", flaky)
+    model = OpenAICompatChatModel(
+        "http://example.invalid/v1",
+        "m",
+        api_key="k",
+        max_attempts=5,
+        retry_backoff_s=0.0,
+        timeout_s=1,
+    )
+    result = model.chat([{"role": "user", "content": "hi"}])
+
+    assert result.text == "the answer"
+    assert calls["n"] == 3, "both TLS-truncation shapes must be retried"
+
+
 def test_summarise_excludes_errors_from_accuracy_and_reports_them():
     from issue_rag.evaluate import summarise
 
@@ -491,6 +568,117 @@ def test_summarise_excludes_errors_from_accuracy_and_reports_them():
 
 
 # --------------------------------------------------- grader-sensitivity harness
+
+
+def test_failed_call_is_not_treated_as_done(monkeypatch):
+    """A recorded failure is not an answer, so resume must rerun it.
+
+    Regression: ``load_shard`` keyed by item id and ignored the ``error`` field,
+    so a failed generation was cached as done. A 95-item run then reported
+    ``n=83, errors=12`` and nothing in the report said "12 items are missing".
+    """
+    import argparse
+    import shutil
+
+    from issue_rag import evaluate as ev
+    from issue_rag.config import RepoPreset
+    from issue_rag.generate import GenerationResult
+
+    work = Path(__file__).resolve().parent / "_shard_tmp"
+    shutil.rmtree(work, ignore_errors=True)
+    work.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr(ev, "RESULTS_DIR", work)
+
+    preset = RepoPreset(key="vite", repo="vitejs/vite", display_name="Vite")
+    items = [
+        {"id": "q1", "query": "how do I do x", "reference_answer": "do y"},
+        {"id": "q2", "query": "why is z slow", "reference_answer": "because w"},
+    ]
+    shard = ev.shard_path(preset, "closed_book")
+    shard.write_text(
+        json.dumps(
+            {
+                "item_id": "q1",
+                "system": "closed_book",
+                "answer": "y",
+                "verdict": "correct",
+                "score": 1.0,
+                "fabricated": False,
+                "cited": True,
+                "latency_s": 1.0,
+                "generated_tokens": 3,
+            }
+        )
+        + "\n"
+        + json.dumps(
+            {
+                "item_id": "q2",
+                "system": "closed_book",
+                "answer": "",
+                "verdict": "error",
+                "score": 0.0,
+                "error": "generation failed after 3 attempts: SSL EOF",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    asked: list[str] = []
+
+    class FakeModel:
+        name = "fake"
+
+        def chat(self, messages, *, max_new_tokens=512, temperature=0.0):
+            asked.append(messages[-1]["content"])
+            return GenerationResult(
+                text="recovered answer", prompt_tokens=1, output_tokens=1, latency_s=0.0
+            )
+
+    class FakeJudge:
+        class model:  # noqa: N801 - mirrors the real attribute shape
+            name = "fake"
+
+        def grade(self, query, reference, candidate):
+            return type(
+                "G",
+                (),
+                {
+                    "verdict": "partial",
+                    "score": 0.5,
+                    "fabricated": False,
+                    "checks": {},
+                    "reason": "ok",
+                },
+            )()
+
+    args = argparse.Namespace(
+        run_tag="", top_k=5, max_new_tokens=64, dense_model=None, reranker_model=None, device="cpu"
+    )
+    try:
+        ev.run_system(
+            "closed_book", items, None, model=FakeModel(), judge=FakeJudge(), preset=preset, args=args
+        )
+
+        assert asked == ["why is z slow"], "only the failed item may be regenerated"
+        records = ev.load_shard(shard)
+        assert ev.finished_ids(records) == {"q1", "q2"}
+        assert records["q2"]["answer"] == "recovered answer"
+        assert "error" not in records["q2"], "the success must supersede the failure"
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+
+
+def test_unparsed_grade_is_not_treated_as_done():
+    """Same rule as the generation path: no parseable verdict means retry."""
+    from issue_rag.evaluate import finished_ids
+
+    records = {
+        "q1": {"item_id": "q1", "verdict": "correct", "score": 1.0},
+        "q2": {"item_id": "q2", "verdict": "unparsed", "score": 0.0},
+        "q3": {"item_id": "q3", "verdict": "error", "score": 0.0, "error": "ssl"},
+    }
+    assert finished_ids(records) == {"q1"}
 
 
 def test_shard_path_is_tag_scoped():
@@ -777,6 +965,80 @@ def test_weighted_kappa_handles_empty_input():
     from issue_rag.human_review import quadratically_weighted_kappa
 
     assert quadratically_weighted_kappa([], []) is None
+
+
+def test_retrieval_metrics_score_the_reference_comment_not_the_issue():
+    """The issue-level recall is a tautology on this corpus; the gold chunk is not.
+
+    Two items: on the first the answering comment is retrieved at rank 2, on the
+    second the window contains only *other* comments from the same issue. Both
+    count as an issue-level hit (that is the tautology), only the first counts as
+    a gold-chunk hit.
+    """
+    from types import SimpleNamespace
+
+    from issue_rag.evaluate import evaluate_retrieval
+
+    def hit(issue_number, comment_id=None):
+        return SimpleNamespace(
+            issue_number=issue_number,
+            doc_id=f"issue-{issue_number}-comment-{comment_id}",
+            metadata={"comment_id": comment_id},
+        )
+
+    class FakeRetriever:
+        def search(self, query, top_k=5, exclude_issue=None):
+            if query == "q1":
+                window = [hit(7, "111"), hit(7, "999")]
+            else:
+                window = [hit(8, "222"), hit(8, "333")]
+            return [h for h in window if h.issue_number != exclude_issue]
+
+    items = [
+        {"query": "q1", "issue_number": 7, "reference_comment_ids": [999]},
+        {"query": "q2", "issue_number": 8, "reference_comment_ids": [444]},
+    ]
+    metrics = evaluate_retrieval(FakeRetriever(), items, top_k=5)
+
+    assert metrics["recall@5"] == 1.0, "both items retrieve their own issue"
+    assert metrics["recall@5_loo"] == 0.0, "structurally zero, by definition"
+    assert metrics["gold_chunk@5"] == 0.5, "only q1 retrieves the answering comment"
+    assert metrics["gold_chunk_top1"] == 0.0, "it was at rank 2, not rank 1"
+    assert metrics["gold_chunk_mrr"] == 0.25, "1/2 for q1, 0 for q2, averaged"
+    assert metrics["self_share@5"] == 1.0, "the whole window comes from the same issue"
+
+
+def test_review_page_storage_key_changes_with_the_queue():
+    """A new batch must not inherit the previous batch's browser progress.
+
+    Regression: the page kept decisions under a constant localStorage key while
+    addressing entries by bare index, so opening a rebuilt queue showed "all 30
+    already graded" from the previous session's review.
+    """
+    from issue_rag.human_review import _page_for
+
+    def entry(review_id, item_id):
+        return {
+            "review_id": review_id,
+            "item_id": item_id,
+            "question": "q",
+            "reference": "r",
+            "candidate": "c",
+        }
+
+    first = _page_for([entry("closed_book:q1", "q1")])
+    replay = _page_for([entry("closed_book:q1", "q1")])
+    second = _page_for([entry("hybrid_rerank:q2", "q2")])
+
+    assert first == replay, "same queue must keep the same key, or progress is lost"
+    assert first != second, "a different queue must get a different key"
+
+    import re
+
+    keys = re.findall(r'localStorage\.getItem\("([^"]+)"\)', first)
+    assert len(keys) == 1
+    assert keys[0].startswith("issueRagDecisions:")
+    assert "closed_book" not in keys[0], "the key must not name a system"
 
 
 def test_review_page_cannot_leak_the_judge_verdict():

@@ -26,7 +26,7 @@ import json
 import pathlib
 from typing import Any, Iterable
 
-from .config import CACHE_DIR, RepoPreset, load_preset
+from .config import CACHE_DIR, RepoPreset, load_env_file, load_preset
 from .github import GitHubClient, GitHubError, QuotaExhausted
 
 ISSUES_FILE = "issues.jsonl"
@@ -337,6 +337,13 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    # ``GITHUB_TOKEN`` lives in .env (gitignored) like the other credentials, but
+    # fetching was the one stage that never read that file -- so a token sitting
+    # in .env was silently ignored and every harvest ran on the 60/hour
+    # anonymous budget. Load it here, after argument validation, before any I/O.
+    loaded = load_env_file()
+    if loaded:
+        print(f"loaded from .env: {', '.join(loaded)}")
     preset = load_preset(args.preset)
     # Without a cache dir the harvester cannot resume, and a 60/hour quota makes
     # an unresumable harvest close to unusable.

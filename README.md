@@ -24,32 +24,37 @@ does what language models do: it produces a plausible version number, a
 plausible API name, and a confident tone.
 
 That failure mode is measurable, and it is the thing this project measures.
-Measured on 29 hand-reviewed items against `vitejs/vite`:
+Measured on **95 hand-reviewed items** against `vitejs/vite`:
 
 | | closed-book | with retrieval (best config) |
 |---|---|---|
-| scored `correct` | 10.3% | **37.9%** |
-| weighted accuracy | 0.190 | **0.517** |
-| flagged `fabricated` | 3.4% | 34.5% |
+| scored `correct` | 8.4% | **64.2%** |
+| weighted accuracy | 0.221 | **0.700** |
+| flagged `fabricated` | 1.1% | 20.0% |
 
 Retrieval clearly helps — **but the size of the gain depends on who grades it**, so
 this repo reports an interval rather than one number:
 
-- under the in-project judge: **0.196 → 0.518** (2.6×)
-- under an independent stricter grader: **0.286 → 0.554** (1.9×)
-- under a blind **human** review of 30 answers: **0.100 → 0.567**
+- under the in-project judge (`deepseek-chat`): **0.221 → 0.700** (3.2×)
+- under an independent stricter grader (`deepseek-reasoner`): **0.305 → 0.711** (2.3×)
+- under a blind **human** review of 30 answers: **0.167 → 0.867** (5.2×)
 
-The human review is the interesting one: it agrees with the judge on 56.7% of
-verdicts (κ=0.607) but disagrees in a consistent direction — the judge gives vague
-advice more credit than a person does, and good retrieval answers less. So the
-machine-measured gains here are **conservative**, which is the opposite of the usual
-worry about LLM judges.
+The human review is the interesting one: it agrees with the judge on **70.0%** of
+verdicts (quadratic κ=0.816) but disagrees in a consistent direction — the judge
+gives vague advice more credit than a person does (+0.100) and good retrieval
+answers less (−0.133). So the machine-measured gains here are **conservative**,
+which is the opposite of the usual worry about LLM judges.
+
+Expanding the eval set is itself an experiment, and it is reported as one. Going
+from 29 to 95 items moved closed-book by **+0.031** — while every retrieval system
+moved by +0.17 to +0.20 — so the headline effect got *stronger* with more data
+rather than regressing toward zero. See [29 items vs 95](#29-items-vs-95-items-what-expanding-the-sample-changed).
 
 Two things are deliberately *not* claimed. The four retrieval configurations are
-mutually indistinguishable (0.466–0.517) — including the reranked one, whose lead
-under the original rubric disappeared once the rubric was corrected. And retrieval
-*raises* the fabrication rate, which is the least obvious result here. All of it is
-discussed under [Results](#results).
+mutually indistinguishable (0.632–0.700, a spread smaller than the grader's own
+noise, and the ordering flips when the grader changes). And retrieval *raises* the
+fabrication rate, which is the least obvious result here. All of it is discussed
+under [Results](#results).
 
 ---
 
@@ -185,42 +190,70 @@ _Produced by `python -m issue_rag.evaluate`. Regenerate with the command above;
 numbers are not hand-edited._
 
 <!-- RESULTS:BEGIN -->
-Setup: 29 hand-reviewed items, generator and judge `deepseek-chat`, 5 retrieved
-excerpts, `vitejs/vite` corpus of 3,078 documents built from 533 issues and 1,097
-comments. Rubric ③ (see [The rubric itself was an experiment](#the-rubric-itself-was-an-experiment)).
+Setup: **95 hand-reviewed items**, generator and judge `deepseek-chat`, 5 retrieved
+excerpts, `vitejs/vite` corpus of **5,473 documents** built from **771 issues and
+2,593 comments**. Rubric ③ (see
+[The rubric itself was an experiment](#the-rubric-itself-was-an-experiment)).
 Full machine-readable output in `data/results/`.
 
 ### Answer quality
 
-| system | accuracy | correct | partial | incorrect | fabricated | cited | p50 |
-|---|---|---|---|---|---|---|---|
-| `closed_book` (no retrieval) | 0.190 | 10.3% | 17.2% | 72.4% | 3.4% | 0% | 4.3 s |
-| `bm25` | **0.517** | **37.9%** | 27.6% | 34.5% | 34.5% | 100% | 3.8 s |
-| `dense` (bge-base-en-v1.5) | 0.466 | 27.6% | 37.9% | 34.5% | 24.1% | 100% | 3.7 s |
-| `hybrid` (RRF) | 0.500 | 37.9% | 24.1% | 37.9% | 37.9% | 100% | 3.7 s |
-| `hybrid + rerank` (bge-reranker-base) | 0.500 | **44.8%** | 10.3% | 44.8% | 34.5% | 100% | 3.9 s |
+| system | accuracy | correct | partial | incorrect | fabricated | cited | p50 | p95 |
+|---|---|---|---|---|---|---|---|---|
+| `closed_book` (no retrieval) | 0.221 | 8.4% | 27.4% | 64.2% | 1.1% | 0% | 4.32 s | 5.00 s |
+| `bm25` | **0.700** | **64.2%** | 11.6% | 24.2% | 20.0% | 100% | 3.70 s | 4.29 s |
+| `dense` (bge-base-en-v1.5) | 0.632 | 55.8% | 14.7% | 29.5% | 28.4% | 100% | 3.65 s | 4.29 s |
+| `hybrid` (RRF) | 0.695 | 63.2% | 12.6% | 24.2% | 21.1% | 100% | 3.53 s | 4.19 s |
+| `hybrid + rerank` (bge-reranker-base) | 0.679 | 62.1% | 11.6% | 26.3% | 23.2% | 100% | 3.77 s | 4.33 s |
 
 _accuracy = correct(1.0) + partial(0.5); fabricated = the judge flagged a wrong
-version, API, or file path._
+version, API, or file path. Every row is n=95 with 0 failed calls._
 
-**Retrieval lifts accuracy from 0.190 to about 0.50, and the four retrieval
-configurations are indistinguishable from each other** (0.466–0.517, a spread
+**Retrieval lifts accuracy from 0.221 to about 0.70, and the four retrieval
+configurations are indistinguishable from each other** (0.632–0.700, a spread
 smaller than the grader's own noise). That second half matters as much as the
-first: this README previously claimed the reranked system was best, and under the
+first: this README once claimed the reranked system was best, and under the
 shipped rubric that claim does not survive — see
 [What survives](#what-survives-and-what-does-not).
+
+### 29 items vs 95 items: what expanding the sample changed
+
+The previous revision of this README reported 29 hand-reviewed items. The set was
+then rebuilt from a wider window (18 months of issues, 3,078 → 5,473 documents)
+and re-reviewed item by item: 200 candidates, 95 kept, 105 dropped. Same rubric,
+same generators, same command. What changed:
+
+| system | 29 items | 95 items | Δ |
+|---|---|---|---|
+| `closed_book` | 0.190 | 0.221 | **+0.031** |
+| `bm25` | 0.517 | 0.700 | +0.183 |
+| `dense` | 0.466 | 0.632 | +0.166 |
+| `hybrid` | 0.500 | 0.695 | +0.195 |
+| `hybrid + rerank` | 0.500 | 0.679 | +0.179 |
+| **gain (best retrieval ÷ closed-book)** | **2.72×** | **3.17×** | +0.45× |
+
+Two readings, and both are honest:
+
+1. **The headline is stable, and it got stronger, not weaker.** Closed-book moved
+   by three points on a sample 3.3× larger; retrieval moved by ~0.18. A finding
+   that survived a 3× increase in sample size and came out *larger* is not a
+   small-sample artefact of the kind reviewers rightly suspect.
+2. **The absolute numbers are not comparable across revisions.** The wider window
+   added many more recent, well-answered threads, and retrieval benefits from that
+   far more than the closed-book model does. Do not compare a row on this page to a
+   row in an older screenshot.
+
+The confidence interval also narrowed by construction: at n=29 a single item moves
+a system by 3.4 points; at n=95 it moves it by 1.1.
 
 ### How much of this is the judge?
 
 Three separate questions, answered by three separate comparisons. All runs reuse
 the *same stored answers* (`evaluate --regrade`), so only the grader varies.
 
-_Every figure in this section is **paired**: it uses only the items that have a
-usable verdict in both arms, so it can differ from the full tables above by a
-hundredth or two. The gain line therefore reads +0.310 here and +0.327 above; both
-are computed from the same shards, over a slightly different item set._
-
-**a) Does the rubric matter?** Same model, same answers, rubric ① vs ③:
+**a) Does the rubric matter?** Same model, same answers, rubric ① vs ③ — measured
+on the *previous* 29-item set, because re-implementing rubric ① is a change to the
+instrument and is not mixed into the current run:
 
 | system | rubric ① | rubric ③ | delta |
 |---|---|---|---|
@@ -234,27 +267,39 @@ are computed from the same shards, over a slightly different item set._
 Almost every system moves by a few hundredths; the reranked one moves by −0.086,
 which is the whole reason its apparent lead disappears.
 
-**b) Does the judge identity matter?** Same rubric ③, `deepseek-chat` vs
-`deepseek-reasoner`, on the two systems measured:
+**b) Does the judge identity matter?** Same rubric ③, same 95 stored answers,
+`deepseek-chat` vs `deepseek-reasoner`:
 
 | system | `deepseek-chat` | `deepseek-reasoner` | delta |
 |---|---|---|---|
-| `closed_book` | 0.196 | 0.286 | +0.089 |
-| `hybrid + rerank` | 0.518 | 0.554 | +0.036 |
-| **gain** | **+0.322** (2.6×) | **+0.268** (1.9×) | |
+| `closed_book` | 0.221 | 0.305 | **+0.084** |
+| `bm25` | 0.700 | 0.658 | −0.042 |
+| `dense` | 0.632 | 0.595 | −0.037 |
+| `hybrid` | 0.695 | 0.668 | −0.026 |
+| `hybrid + rerank` | 0.679 | **0.711** | **+0.032** |
+| **gain (best retrieval ÷ closed-book)** | **3.17×** | **2.33×** | |
 
-**c) Does the judge agree with itself?** Two runs of `deepseek-reasoner` over
-identical answers, rubric ③:
+The stricter grader is *lenient* on closed-book answers and *strict* on retrieval
+answers, which compresses the gain. It also reorders the table: `bm25` is best
+under `deepseek-chat`, `hybrid + rerank` is best under `deepseek-reasoner`, and the
+largest mover between them is 0.042 — inside the noise band measured next.
+
+**c) Does the judge agree with itself?** Two runs of `deepseek-reasoner` over the
+same 95 answers (this is the noise floor: a difference between two systems smaller
+than this is not a result):
 
 | system | run a | run b | delta | exact agreement |
 |---|---|---|---|---|
-| `closed_book` | 0.287 | 0.292 | 0.005 | 70.4% |
-| `hybrid + rerank` | 0.567 | 0.558 | **0.010** | 82.1% |
+| `closed_book` | 0.305 | 0.289 | −0.016 | 78.9% |
+| `bm25` | 0.658 | 0.668 | +0.011 | 86.3% |
+| `dense` | 0.595 | 0.621 | +0.026 | 84.2% |
+| `hybrid` | 0.668 | 0.684 | +0.016 | 86.3% |
+| `hybrid + rerank` | 0.711 | 0.705 | −0.005 | 86.3% |
 
-Compare rubric ①, where the same measurement gave 0.069 and 0.017 on those two
-systems. Tightening the rubric cut the run-to-run difference on the reported
-aggregate by roughly 2–7× **and** cut the cross-judge gain interval from
-1.5×–4.2× to **1.9×–2.6×**.
+Run-to-run drift is **0.005–0.026** on the aggregate, and the ordering is *identical*
+in both runs. Cross-judge agreement is lower (53.7%–83.2% exact) — two different
+models disagree more than one model disagrees with itself, which is why the interval
+above is reported as an interval.
 
 **d) Does a *human* agree?** The only measurement here that is not a model grading
 a model. 30 answers (15 per system) were graded blind through a local review page:
@@ -264,68 +309,84 @@ judge's verdict and never which system produced the answer.
 | metric | value |
 |---|---|
 | reviewed pairs | 30 |
-| exact agreement | **56.7%** |
-| usable-vs-not agreement | **66.7%** |
-| quadratic-weighted kappa | **0.607** ("substantial") |
+| exact agreement | **70.0%** |
+| usable-vs-not agreement | **73.3%** |
+| quadratic-weighted kappa | **0.816** ("almost perfect") |
 
 | system | n | exact | usable | mean human | mean judge |
 |---|---|---|---|---|---|
-| `closed_book` | 15 | 47% | 53% | **0.100** | 0.267 |
-| `hybrid + rerank` | 15 | 67% | 80% | **0.567** | 0.467 |
+| `closed_book` | 15 | 67% | 73% | **0.167** | 0.267 |
+| `hybrid + rerank` | 15 | 73% | 73% | **0.867** | 0.733 |
 
 The last two columns are the finding. **The judge is lenient on vague advice and
-strict on good answers**: it scores closed-book 0.167 *higher* than the human does
-and the reranked system 0.100 *lower*. So on this sample the human sees a **+0.467**
-gap where the judge sees +0.200 — the machine-measured gain is a *conservative*
-estimate, not an inflated one. That is the opposite direction from the usual worry
-about LLM judges.
+strict on good answers**: it scores closed-book answers 0.100 *higher* than the
+human does and the reranked system 0.133 *lower*. So on this sample the human sees
+a **+0.700** gap (5.2×) where the judge sees +0.466 (2.75×) — the machine-measured
+gain is a *conservative* estimate, not an inflated one. That is the opposite
+direction from the usual worry about LLM judges.
 
 Caveats, because one sample is one sample: a single reviewer, 15 per system, one
 sitting. Treat it as validating the instrument's *direction*, not as a precise
-estimate.
+estimate. Worth noting that both this axis and the sample-size experiment point the
+same way — the measured retrieval gain is a floor.
 
 ### What survives, and what does not
 
 | claim | verdict |
 |---|---|
-| Retrieval beats closed-book | **holds** — every rubric, every judge, every run, and the human review |
-| The gain is "4×" | **does not hold** — it is **1.9×–2.6×** by the model judges; the human sample suggests larger |
-| The reranked system is the best retrieval config | **does not hold** — it leads under rubric ① and ties or trails under ③ |
-| Any ordering among `bm25` / `hybrid` / `dense` / `rerank` | **unresolved** — all within 0.05, i.e. inside the noise floor |
-| The judge understates the gain | **supported** — it over-credits vague advice by 0.167 and under-credits retrieval by 0.100 |
+| Retrieval beats closed-book | **holds** — every rubric, every judge, every run, every sample size, and the human review |
+| The gain is "4×" | **does not hold** — it is **2.3×–3.2×** by the model judges; the human sample suggests ~5× |
+| The reranked system is the best retrieval config | **does not hold** — it leads under `deepseek-reasoner`, trails `bm25` under `deepseek-chat`, and the gap is 0.03 |
+| Any ordering among `bm25` / `hybrid` / `dense` / `rerank` | **unresolved** — all within 0.07, i.e. at or inside the noise floor |
+| The judge understates the gain | **supported** — it over-credits vague advice by 0.100 and under-credits retrieval by 0.133 |
+| The eval set was too small to trust | **does not hold** — tripling it moved closed-book by 0.031 |
 
 The ordering row is well supported rather than merely suspected: the four retrieval
-configurations sit within 0.05 of each other, the grader's run-to-run noise is
-~0.01–0.07, and the retrieval metrics are degenerate (everything finds the gold
-document at rank 1). Three independent lines of evidence say the same thing.
+configurations sit within 0.07 of each other, the grader's run-to-run noise is
+0.005–0.026 on the aggregate, the ordering flips when the grader changes, and the
+issue-level retrieval metrics are degenerate (see below). Four independent lines of
+evidence say the same thing: do not claim an ordering.
 
 ### On the items the closed-book model got wrong
 
-| system | accuracy | correct | incorrect | fabricated |
+| system | accuracy | correct | partial | incorrect | fabricated |
+|---|---|---|---|---|---|
+| `closed_book` | 0.149 | 0.0% | 29.9% | 70.1% | 1.1% |
+| `bm25` | 0.678 | 62.1% | 11.5% | 26.4% | 21.8% |
+| `dense` | 0.621 | 54.0% | 16.1% | 29.9% | 28.7% |
+| `hybrid` | 0.672 | 60.9% | 12.6% | 26.4% | 21.8% |
+| `hybrid + rerank` | 0.672 | 60.9% | 12.6% | 26.4% | 24.1% |
+
+A subgroup of the same run (n=87), not a filtered eval set — the table above still
+counts every item, so the comparison is not rigged by construction. This is where
+retrieval actually does its work: on items the model can already answer from memory
+it adds nothing, and 8 of 95 items are in that category.
+
+### Retrieval quality — measured on the answering comment, not the issue
+
+Relevance here is the **comment that answers the question**, not the issue thread it
+came from:
+
+| retriever | gold chunk@5 | gold chunk MRR | gold chunk top-1 | share of window from the same issue |
 |---|---|---|---|---|
-| `closed_book` | 0.096 | 0.0% | 80.8% | 3.8% |
-| `bm25` | 0.481 | 34.6% | 38.5% | 34.6% |
-| `dense` | 0.442 | 26.9% | 38.5% | 26.9% |
-| `hybrid` | 0.519 | 38.5% | 34.6% | 34.6% |
-| `hybrid + rerank` | 0.500 | 46.2% | 46.2% | 34.6% |
+| `bm25` | 0.611 | 0.280 | 0.116 | 0.983 |
+| `dense` | 0.516 | 0.206 | 0.063 | 0.998 |
+| `hybrid` | 0.579 | 0.247 | 0.084 | 0.996 |
+| `hybrid + rerank` | **0.621** | **0.289** | **0.147** | 0.990 |
 
-A subgroup of the same run (n=26), not a filtered eval set — the table above still
-counts every item, so the comparison is not rigged by construction.
+This table does discriminate — it separates `dense` (0.516) from the reranker
+(0.621), which the answer-quality table cannot do. It also produces the most
+interesting negative result in the repo: **the retriever with the best retrieval
+quality is not the one with the best answers** (`hybrid + rerank` leads here at
+0.621 but trails `bm25` on accuracy, 0.679 vs 0.700). Better retrieval of the
+reference comment does not fully propagate to the final answer, which is the
+honest reason the four configurations cannot be ranked.
 
-### Retrieval quality — and why these numbers cannot rank retrievers
-
-| retriever | recall@5 | recall@5 leave-one-out | MRR | MRR LOO |
-|---|---|---|---|---|
-| `bm25` | 1.000 | 0.000 | 1.000 | 0.000 |
-| `dense` | 1.000 | 0.000 | 1.000 | 0.000 |
-| `hybrid` | 1.000 | 0.000 | 1.000 | 0.000 |
-| `hybrid_rerank` | 1.000 | 0.000 | 1.000 | 0.000 |
-
-**Read this as a broken measurement, not a good one.** The query is the issue
-title and every document is prefixed with that same title, so the gold document
-is found at rank 1 by *every* retriever. The leave-one-out column removes the
-source issue's own documents and collapses to zero, which is the honest signal:
-each answer exists in exactly one thread, so there is no second thread to find.
+The last column explains the older, issue-level table: **98–99.8% of the retrieved
+window is chunks of the gold issue itself.** The retriever finds the right thread
+(trivially — the query is the thread's title) and then fills all five slots with
+that thread. Any issue-level "was the right issue retrieved" metric is therefore
+~1.0 by construction for every retriever, which is why it was replaced.
 
 <!-- RESULTS:END -->
 
@@ -375,27 +436,32 @@ rubric moved it by −0.086 while every other system moved by +0.02 to +0.05. A
 result that flips when the measuring instrument is corrected was a result about the
 instrument. This is the single most useful thing in the repo to have caught.
 
-**2. The four retrieval configurations are indistinguishable.** 0.466, 0.500, 0.500,
-0.517 — a 0.05 spread against a grader whose own run-to-run noise is 0.01–0.07.
-Three independent lines point the same way: the spread is tiny, the retrieval
-metrics are degenerate (gold always at rank 1), and every result is within one or
-two items at n=29. Do not claim an ordering.
+**2. The four retrieval configurations are indistinguishable.** 0.632, 0.679, 0.695,
+0.700 — a 0.07 spread against a grader whose own run-to-run noise is 0.005–0.026
+on the aggregate, with the ordering flipping when the judge changes. Four
+independent lines point the same way: the spread is small, the ordering is not
+stable across judges, the issue-level retrieval metrics are degenerate, and the
+retriever with the best comment-level retrieval is not the one with the best
+answers. Do not claim an ordering.
 
-**3. Retrieval buys roughly 2×, and that is the durable finding.** closed_book
-moves from 0.190 to about 0.50 under the shipped rubric, and the gain survives two
-judges (+0.322 vs +0.268) and every rubric tried. The interval is 1.9×–2.6×, not
-"4×".
+**3. Retrieval buys 2.3×–3.2×, and that is the durable finding.** closed-book moves
+from 0.221 to about 0.70 under the shipped rubric, and the gain survives two judges
+(3.17× vs 2.33×), a rubric change, a 3.3× larger sample, and it is *larger* under
+human review (~5×). Not "4×", and not 1.9× either — the interval moved up when the
+sample grew, which is the opposite of the usual small-sample optimism.
 
 **4. Retrieval makes the model confidently wrong rather than vague.** With
-retrieval, fabrication sits at 24–38% and citation markers appear in 100% of
-answers; without it, the model mostly admits ignorance and fabricates only 3.4% of
+retrieval, fabrication sits at 20–28% and citation markers appear in 100% of
+answers; without it, the model mostly admits ignorance and fabricates only 1.1% of
 the time. Grounding and citation fidelity are separate problems and the second one
 is unsolved here.
 
-**5. About a quarter of retrieval answers summarise instead of answering.**
-Nine of 29 BM25 answers were of the form "this is tracked in issue #21827". The
-prompt forbids exactly that and only partly helped. In a real product this needs
-an answer-vs-summary check, not a bigger model.
+**5. Better retrieval does not automatically mean better answers.** The reranker
+retrieves the answering comment most often (0.621 vs 0.611 for BM25) and still
+scores lower end-to-end (0.679 vs 0.700). Whatever the generator does with the
+window matters more than the last increment of retrieval quality — which is why
+this repo reports the retrieval table *and* the answer table, and never derives one
+from the other.
 
 
 ---
@@ -429,23 +495,41 @@ that gap survives a stronger generator.
 Stated plainly, because a results table without limitations is marketing.
 
 * **LLM-as-judge, now with a human check.** Swapping the judge moves a system by up
-  to 0.09, the *same* judge run twice moves it by up to 0.07, and changing the
+  to 0.084, the *same* judge run twice moves it by up to 0.026, and changing the
   rubric moved one system by 0.086. A blind human review of 30 pairs agrees with the
-  judge on 56.7% of verdicts (quadratic kappa 0.607) and, more usefully, disagrees
-  in a consistent direction: the judge over-credits vague advice by 0.167 and
-  under-credits retrieval by 0.100. The remaining limit is *coverage* — one
+  judge on 70.0% of verdicts (quadratic kappa 0.816) and, more usefully, disagrees
+  in a consistent direction: the judge over-credits vague advice by 0.100 and
+  under-credits retrieval by 0.133. The remaining limit is *coverage* — one
   reviewer, 15 items per system, one sitting — not the absence of a check.
+* **The issue-level retrieval metrics were a tautology, and are retired.** The
+  original table reported recall@5 = 1.000 / MRR = 1.000 / leave-one-out = 0.000 for
+  every retriever, on 29 items and on 95 items alike. Both halves are artefacts of
+  how the task is built, not measurements:
+  *the query is the issue title and every chunk is prefixed with that title, so the
+  gold issue is retrieved at rank 1 by construction — measured 98–99.8% of each
+  window is chunks of the gold issue itself;* and *the reference document belongs to
+  the gold issue, so hiding that issue removes the only relevant document by
+  definition, making leave-one-out identically zero.* The replacement in
+  [Retrieval quality](#retrieval-quality--measured-on-the-answering-comment-not-the-issue)
+  scores the answering **comment** instead, which does discriminate (0.516–0.621).
+  The retired numbers are kept in `data/results/` as the archived arms, not as
+  evidence.
 * **Mined eval set, not a curated benchmark.** Maintainer replies are occasionally
-  incomplete or answer a narrower question than the title suggests. The
-  keep/drop review pass exists to cut those, and the sheet is committed so the
-  selection is auditable.
+  incomplete or answer a narrower question than the title suggests. The keep/drop
+  review pass exists to cut those, and the sheet is committed so the selection is
+  auditable: 200 candidates reviewed, 95 kept (47.5%).
 * **One repository, one domain.** Conclusions about BM25-versus-dense weighting
   are domain-specific; a different preset will reorder the table.
 * **Title-as-query favours lexical matching.** BM25 gets a slightly easier task
-  than it would with paraphrased questions. The leave-one-out column partially
-  compensates, but a paraphrase-based query set is the honest next step.
+  than it would with paraphrased questions. With the comment-level metric in place
+  this is now measurable rather than hidden, but a paraphrase-based query set is
+  still the honest next step.
 * **No multi-hop.** Every question is answered from a single issue thread. Questions
   that need two issues combined are out of scope.
+* **Absolute scores are generator-bound.** The shipped runs use `deepseek-chat`
+  through `--provider deepseek`; the default generator is a local 3B model, which
+  scores lower in absolute terms. The closed-book vs RAG *gap* is the finding and it
+  survives the stronger generator — the absolute numbers do not transfer.
 
 ---
 
