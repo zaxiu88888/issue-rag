@@ -281,21 +281,30 @@ a system by 3.4 points; at n=95 it moves it by 1.1.
 Three separate questions, answered by three separate comparisons. All runs reuse
 the *same stored answers* (`evaluate --regrade`), so only the grader varies.
 
-**a) Does the rubric matter?** Same model, same answers, rubric ① vs ③ — measured
-on the *previous* 29-item set, because re-implementing rubric ① is a change to the
-instrument and is not mixed into the current run:
+**a) Does the rubric matter?** Same model, same 95 stored answers, rubric ① vs ③.
+Rubric ① asks for one verdict; ③ asks four factual questions and maps them in
+code. Both are runnable (`--judge-rubric holistic|checks`), and ① exists only for
+this comparison:
 
-| system | rubric ① | rubric ③ | delta |
+| system | rubric ① | rubric ③ | delta (③ − ①) |
 |---|---|---|---|
-| `closed_book` | 0.138 | 0.190 | +0.052 |
-| `bm25` | 0.483 | 0.517 | +0.035 |
-| `dense` | 0.448 | 0.466 | +0.017 |
-| `hybrid` | 0.466 | 0.500 | +0.035 |
-| `hybrid + rerank` | 0.586 | 0.500 | **−0.086** |
-| **best retrieval − closed_book** | **+0.448** | **+0.310** | |
+| `closed_book` | 0.174 | 0.221 | **+0.047** |
+| `bm25` | 0.737 | 0.700 | −0.037 |
+| `dense` | 0.695 | 0.632 | −0.063 |
+| `hybrid` | 0.716 | 0.695 | −0.021 |
+| `hybrid + rerank` | **0.768** | 0.679 | **−0.089** |
+| **gain (best retrieval ÷ closed_book)** | **4.42×** | **3.17×** | |
 
-Almost every system moves by a few hundredths; the reranked one moves by −0.086,
-which is the whole reason its apparent lead disappears.
+**This is where the number "4×" in the old version of this README came from.**
+Under the holistic rubric, retrieval looks 4.42× better; under the shipped rubric
+it is 3.17×. The rubric was manufacturing the headline: it lifts every retrieval
+system and pushes closed-book *down*, so the gap nearly doubles. The single biggest
+mover is the reranker (+0.089), which is why it "led" under ① and does not under
+③, and why the comparison now reproduced that on 95 items instead of 29.
+
+On the previous 29-item set the same comparison gave ⓐ 0.586 vs ③ 0.500 for the
+reranker and a gain of 4.48× vs 3.10× — the direction and the size are stable, so
+this is not a small-sample artifact.
 
 **b) Does the judge identity matter?** Same rubric ③, same 95 stored answers,
 `deepseek-chat` vs `deepseek-reasoner`:
@@ -589,8 +598,11 @@ src/issue_rag/
   judge.py                rubric grading + grounding audit
   evaluate.py             the experiment matrix and report writer
   models.py               weight download (ModelScope or HF)
-  serve.py                dependency-free demo UI
+  serve.py                dependency-free demo UI (needs a server and a key)
+  site.py                 static results site: one self-contained HTML file
 tests/test_pipeline.py    hermetic tests: chunking, tokenizer, RRF, filters, parsing
+docs/index.html           the static site (generated, served by GitHub Pages)
+docs/BLOG.md              the long-form write-up: three things that went wrong
 docs/DATA_QUALITY.md      the sampling traps, measured
 docs/RUNBOOK.md           the two-week execution plan, stage by stage
 ```

@@ -96,17 +96,20 @@ _accuracy = correct(1.0) + partial(0.5)；fabricated = 判分器标记出错误�
 
 三个问题，三次对照。所有对照都**复用同一批已存的答案**（`evaluate --regrade`），只换判分环节。
 
-**a) rubric 影响多大？** 同模型、同答案，rubric ① vs ③（在**旧的 29 条**上测，因为重新实现 rubric ① 等于改动被测仪器，不混进当前跑批）：
+**a) rubric 影响多大？** 同模型、同一批 95 条答案，rubric ① vs ③。① 是「直接给一个判定」，③ 是「回答四个事实性问题、由代码映射」。两个都能跑（`--judge-rubric holistic|checks`），① 只为这个对照存在：
 
-| 系统 | rubric ① | rubric ③ | Δ |
+| 系统 | rubric ① | rubric ③ | Δ（③ − ①） |
 |---|---|---|---|
-| `closed_book` | 0.138 | 0.190 | +0.052 |
-| `bm25` | 0.483 | 0.517 | +0.035 |
-| `dense` | 0.448 | 0.466 | +0.017 |
-| `hybrid` | 0.466 | 0.500 | +0.035 |
-| `hybrid + rerank` | 0.586 | 0.500 | **−0.086** |
+| `closed_book` | 0.174 | 0.221 | **+0.047** |
+| `bm25` | 0.737 | 0.700 | −0.037 |
+| `dense` | 0.695 | 0.632 | −0.063 |
+| `hybrid` | 0.716 | 0.695 | −0.021 |
+| `hybrid + rerank` | **0.768** | 0.679 | **−0.089** |
+| **增益（最好检索 ÷ 闭卷）** | **4.42×** | **3.17×** | |
 
-几乎每个系统只动几个百分点，只有 rerank 掉 −0.086——它当初「领先」的假象就是这么消失的。
+**「4 倍」这个数字就是从这里来的。** 用整体判断的 rubric，检索看起来好 4.42 倍；用现在的 rubric 是 3.17 倍。rubric 在制造头条：它把每个检索系统都抬高、把闭卷压低，于是差距几乎翻倍。动得最多的是 reranker（+0.089），这正是它「领先」的假象的来源——而且这次是在 95 条上复现，不只是 29 条。
+
+（29 条那轮同样对照：rerank ① 0.586 vs ③ 0.500，增益 4.48× vs 3.10×。方向和幅度都稳定，所以不是小样本假象。）
 
 **b) 换判分模型影响多大？** 同 rubric、同一批 95 条答案，`deepseek-chat` vs `deepseek-reasoner`：
 
@@ -156,8 +159,8 @@ _accuracy = correct(1.0) + partial(0.5)；fabricated = 判分器标记出错误�
 | 主张 | 判定 |
 |---|---|
 | 检索优于闭卷 | **成立**——每个 rubric、每个判分器、每一遍、每种样本量、以及人工盲评 |
-| 增益是「4 倍」 | **不成立**——模型判分给出 **2.3×–3.2×**，人工样本指向约 5× |
-| rerank 是最好的检索配置 | **不成立**——`deepseek-reasoner` 下它第一，`deepseek-chat` 下落后于 `bm25`，差 0.03 |
+| 增益是「4 倍」 | **不成立**——那是 rubric ① 的产物（复现为 4.42×）；现行 rubric 是 **2.3×–3.2×**，人工样本指向约 5× |
+| rerank 是最好的检索配置 | **不成立**——rubric ① 下它领先（0.768），rubric ③ 下落后于 `bm25`，`deepseek-reasoner` 下又反超 |
 | `bm25` / `hybrid` / `dense` / `rerank` 之间的排序 | **未决**——全部落在 0.07 内，等于在噪声带里 |
 | 判分器低估了增益 | **支持**——对泛泛建议过宽 0.100，对检索过严 0.133 |
 | 评测集太小、不可信 | **不成立**——扩了 3.3 倍，闭卷只动 0.031 |
@@ -265,8 +268,11 @@ src/issue_rag/
   judge.py                四问 rubric + 代码内 verdict 映射
   evaluate.py             实验矩阵与报告生成
   models.py               权重下载（ModelScope 或 HF）
-  serve.py                零依赖演示 UI
-tests/test_pipeline.py    73 个 hermetic 测试：分块、分词、RRF、筛选、解析
+  serve.py                零依赖演示 UI（需要起服务 + API key）
+  site.py                 静态结果站点：单个自包含 HTML
+tests/test_pipeline.py    75 个 hermetic 测试：分块、分词、RRF、筛选、解析
+docs/index.html           静态站点（由命令生成，可直接用 GitHub Pages 托管）
+docs/BLOG.md              长文：三次翻车与教训
 docs/DATA_QUALITY.md      三类采样陷阱，逐条量化
 docs/RUNBOOK.md           从零到已发表数字的执行手册
 ```

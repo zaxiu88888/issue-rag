@@ -1,0 +1,83 @@
+{
+  "preset": "vitejs/vite",
+  "baseline_judge": "deepseek-chat",
+  "variant_judge": "deepseek-chat",
+  "systems": {
+    "closed_book": {
+      "n": 95,
+      "dropped": 0,
+      "baseline_accuracy": 0.2211,
+      "variant_accuracy": 0.1737,
+      "delta": -0.0474,
+      "exact_agreement": 62.1,
+      "binary_agreement": 65.3,
+      "verdict_transitions": {
+        "partial -> incorrect": 20,
+        "incorrect -> partial": 12,
+        "correct -> partial": 3,
+        "incorrect -> correct": 1
+      }
+    },
+    "bm25": {
+      "n": 95,
+      "dropped": 0,
+      "baseline_accuracy": 0.7,
+      "variant_accuracy": 0.7368,
+      "delta": 0.0368,
+      "exact_agreement": 84.2,
+      "binary_agreement": 90.5,
+      "verdict_transitions": {
+        "incorrect -> partial": 7,
+        "partial -> correct": 4,
+        "correct -> partial": 2,
+        "partial -> incorrect": 2
+      }
+    },
+    "dense": {
+      "n": 95,
+      "dropped": 0,
+      "baseline_accuracy": 0.6316,
+      "variant_accuracy": 0.6947,
+      "delta": 0.0632,
+      "exact_agreement": 81.1,
+      "binary_agreement": 86.3,
+      "verdict_transitions": {
+        "incorrect -> partial": 11,
+        "partial -> correct": 4,
+        "partial -> incorrect": 2,
+        "correct -> partial": 1
+      }
+    },
+    "hybrid": {
+      "n": 95,
+      "dropped": 0,
+      "baseline_accuracy": 0.6947,
+      "variant_accuracy": 0.7158,
+      "delta": 0.0211,
+      "exact_agreement": 81.1,
+      "binary_agreement": 92.6,
+      "verdict_transitions": {
+        "correct -> partial": 6,
+        "incorrect -> partial": 6,
+        "partial -> correct": 5,
+        "partial -> incorrect": 1
+      }
+    },
+    "hybrid_rerank": {
+      "n": 95,
+      "dropped": 0,
+      "baseline_accuracy": 0.6789,
+      "variant_accuracy": 0.7684,
+      "delta": 0.0895,
+      "exact_agreement": 81.1,
+      "binary_agreement": 84.2,
+      "verdict_transitions": {
+        "incorrect -> partial": 10,
+        "partial -> correct": 3,
+        "incorrect -> correct": 3,
+        "partial -> incorrect": 2
+      }
+    }
+  },
+  "missing": []
+}

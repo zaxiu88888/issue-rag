@@ -1008,6 +1008,68 @@ def test_retrieval_metrics_score_the_reference_comment_not_the_issue():
     assert metrics["self_share@5"] == 1.0, "the whole window comes from the same issue"
 
 
+def test_holistic_judge_is_opt_in_and_never_maps_through_the_checks():
+    """Rubric ① is kept only to reproduce the A/B, so it must stay separate.
+
+    Every published number depends on the shipped four-check mapping. A holistic
+    run has to be identifiable in the shard -- otherwise someone could mistake it
+    for a shipped-rubric result.
+    """
+    from issue_rag.judge import HolisticJudge
+
+    class FakeModel:
+        name = "fake"
+        calls: list[str] = []
+
+        def chat(self, messages, *, max_new_tokens=160, temperature=0.0):
+            FakeModel.calls.append(messages[0]["content"])
+            return type(
+                "R",
+                (),
+                {
+                    "text": '{"verdict": "partial", "fabricated": false, "reason": "x"}',
+                    "latency_s": 0.1,
+                },
+            )()
+
+    grade = HolisticJudge(FakeModel()).grade("q", "ref", "cand")
+
+    assert grade.verdict == "partial"
+    assert grade.checks == {}, "holistic output must not fabricate four checks"
+    assert grade.meta["rubric"] == "holistic"
+    assert "four" not in FakeModel.calls[0].lower(), "must not ask the four questions"
+
+
+def test_static_site_degrades_gracefully_with_no_harvested_data(monkeypatch):
+    """CI has no `data/results`, and the exporter must still produce a page.
+
+    The site is a renderer over `data/results`, so the hermetic requirement is
+    narrow but real: with nothing to render it must emit placeholders rather than
+    crash, or `python -m issue_rag.site` becomes another command that only works
+    on the author's machine.
+    """
+    import shutil
+
+    from issue_rag import site
+    from issue_rag.config import RepoPreset
+
+    work = Path(__file__).resolve().parent / "_site_tmp"
+    shutil.rmtree(work, ignore_errors=True)
+    (work / "results").mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr(site, "RESULTS_DIR", work / "results")
+    monkeypatch.setattr(site, "load_jsonl", lambda _path: [])
+
+    preset = RepoPreset(key="vite", repo="vitejs/vite", display_name="Vite")
+    try:
+        page = site.build(preset, work / "out").read_text(encoding="utf-8")
+        assert "issue-rag" in page
+        assert "Answer quality" in page
+        assert "Retrieval quality" in page
+        assert "&mdash;" in page or "—" in page, "missing data must show as a dash"
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+
+
 def test_demo_page_renders_answer_markdown_instead_of_escaping_it():
     """The answer used to be shown with ``white-space: pre-wrap`` and HTML-escaped,
     so readers saw literal asterisks and backticks: "too messy to read". The

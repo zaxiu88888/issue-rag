@@ -342,8 +342,34 @@ sub-answer fired. Arm ② won on agreement and lost on the other two.
   `RESULTS` block (between the HTML comments).
 - Add the limitations you actually hit, not the generic ones.
 - Write the technical post: the interesting part is
-  [`DATA_QUALITY.md`](DATA_QUALITY.md), not the accuracy number.
+  [`DATA_QUALITY.md`](DATA_QUALITY.md), not the accuracy number. A long-form draft
+  that follows this advice is [`BLOG.md`](BLOG.md): the rubric change, the
+  sample-size change, and the metric that turned out to be a tautology.
 - Commit daily. The commit history is evidence the project is real.
+
+### The static site (the thing a reader can actually click)
+
+`serve.py` needs a server, the corpus and an API key, so nobody outside this
+machine can try the demo. `site.py` exports the same numbers as one
+self-contained HTML file — no build step, no JS dependencies, no network calls:
+
+```bash
+python -m issue_rag.site --preset vite --out docs
+```
+
+That writes `docs/index.html` (~270 KB: headline cards, the accuracy table, the
+retrieval table, the rubric A/B when both arms exist, and all 95 eval items with
+both systems' answers side by side — searchable and filterable).
+
+**To put it online: one toggle, no CI needed.**
+
+1. Repository **Settings** → **Pages**
+2. Source: **Deploy from a branch**; Branch **`main`**, folder **`/docs`**
+3. Save. The page appears at `https://<user>.github.io/issue-rag/` within a minute.
+
+Because the file is committed, the deployed page is a build artifact whose history
+is in git: regenerating it means re-running the command and committing the diff,
+which is the same accountability the rest of the repo has.
 
 ---
 

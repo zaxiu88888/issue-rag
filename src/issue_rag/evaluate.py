@@ -32,7 +32,7 @@ from .config import RESULTS_DIR, RepoPreset, load_env_file, load_preset
 from .corpus import load_jsonl
 from .evalset import EVALSET_FILE
 from .generate import ChatModel, GenerationError, resolve_model
-from .judge import Judge
+from .judge import HolisticJudge, Judge
 from .retrieval import Corpus, build_retriever
 
 CORPUS_FILE = "corpus.jsonl"
@@ -630,6 +630,17 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--judge-endpoint", default="", help="base URL for the grader")
     parser.add_argument(
+        "--judge-rubric",
+        choices=("checks", "holistic"),
+        default="checks",
+        help=(
+            "which rubric the grader uses. 'checks' (default) is the shipped four "
+            "questions with the verdict mapped in code; 'holistic' is the original "
+            "single-verdict prompt, kept only so the rubric A/B can be regenerated "
+            "by a command. Never publish numbers produced with 'holistic'"
+        ),
+    )
+    parser.add_argument(
         "--judge-max-tokens",
         type=int,
         default=160,
@@ -705,6 +716,9 @@ def make_judge(args: argparse.Namespace, generator: ChatModel | None) -> Judge:
             model=args.judge_model,
             local_default=args.local_model,
         )
+    if getattr(args, "judge_rubric", "checks") == "holistic":
+        # Opt-in only, for the rubric A/B. The shipped instrument stays Judge.
+        return HolisticJudge(judge_model, max_new_tokens=args.judge_max_tokens)
     return Judge(judge_model, max_new_tokens=args.judge_max_tokens)
 
 
