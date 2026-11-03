@@ -2,6 +2,8 @@
 
 **English** | [简体中文全文](README.zh-CN.md)
 
+**[▶ 在线结果页（GitHub Pages）](https://zaxiu88888.github.io/issue-rag/)** — 浏览全部 95 条评测：问题、维护者参考答案、两个系统的答案、判定，可搜索可筛选。
+
 ---
 
 ## 中文读者从这里看起
@@ -601,7 +603,7 @@ src/issue_rag/
   serve.py                dependency-free demo UI (needs a server and a key)
   site.py                 static results site: one self-contained HTML file
 tests/test_pipeline.py    hermetic tests: chunking, tokenizer, RRF, filters, parsing
-docs/index.html           the static site (generated, served by GitHub Pages)
+docs/index.html           the static site (generated, live at zaxiu88888.github.io/issue-rag)
 docs/BLOG.md              the long-form write-up: three things that went wrong
 docs/DATA_QUALITY.md      the sampling traps, measured
 docs/RUNBOOK.md           the two-week execution plan, stage by stage
