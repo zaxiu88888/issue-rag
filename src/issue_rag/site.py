@@ -1,4 +1,6 @@
-"""Export a static, single-file results site.
+"""把结果导出成单文件静态站点（可被 GitHub Pages 直接托管）。
+
+Export a static, single-file results site.
 
 Why this exists: the live demo needs a server and an API key, so a reader who
 lands on the repository cannot try anything. `serve.py` is right for the author
@@ -165,9 +167,8 @@ def _item_cards(preset: RepoPreset) -> tuple[str, int]:
         if not left and not right:
             continue
         verdicts = f"{left.get('verdict', '—')} / {right.get('verdict', '—')}"
-        flags = "cb" if left.get("verdict") == "correct" else "cb-miss"
         cards.append(
-            f"""<article class="item" data-verdicts="{_esc(verdicts)}" data-flag="{flags}">
+            f"""<article class="item" data-verdicts="{_esc(verdicts)}">
   <header>
     <span class="iid">{_esc(iid)}</span>
     <span class="q">{_esc(item.get('query'))}</span>
@@ -185,7 +186,7 @@ def _item_cards(preset: RepoPreset) -> tuple[str, int]:
 
 
 STYLE = """
-:root{--ink:#16181d;--muted:#666e7a;--line:#e3e5e9;--bg:#fafbfc;--accent:#0b5cad}
+:root{--ink:#16181d;--muted:#666e7a;--line:#e3e5e9;--bg:#fafbfc}
 *{box-sizing:border-box}
 body{margin:0 auto;padding:3rem 1.25rem 6rem;max-width:1000px;color:var(--ink);
   font:16px/1.6 -apple-system,"Segoe UI",Roboto,sans-serif;background:#fff}

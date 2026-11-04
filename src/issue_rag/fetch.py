@@ -1,4 +1,6 @@
-"""Harvest raw issues and issue comments into JSONL.
+"""抓取原始 issue 与评论到 JSONL，分两阶段：issue 走搜索接口、评论走 per-issue。
+
+Harvest raw issues and issue comments into JSONL.
 
 Usage::
 

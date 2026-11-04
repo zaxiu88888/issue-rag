@@ -1,4 +1,6 @@
-"""Minimal browser demo: ask a question, get an answer plus the issue threads it used.
+"""极简浏览器演示：提问 → 答案 + 引用的 issue 线程。
+
+Minimal browser demo: ask a question, get an answer plus the issue threads it used.
 
 Deliberately dependency-free (``http.server``) so the demo cannot fail to start
 and adds nothing to the install. A richer UI belongs in a separate front-end
@@ -13,7 +15,6 @@ from __future__ import annotations
 
 import argparse
 import html
-import json
 import re
 import threading
 import urllib.parse

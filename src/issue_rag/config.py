@@ -1,4 +1,6 @@
-"""Project paths and repository presets.
+"""项目路径常量、仓库预设（preset）与 .env 凭据加载。
+
+Project paths and repository presets.
 
 The pipeline is repo-agnostic on purpose: every stage reads its target from a
 preset, so swapping the domain under study is a one-line config edit rather

@@ -1,4 +1,6 @@
-"""Download model weights into ``data/models``.
+"""把模型权重下载到 data/models（默认走 ModelScope）。
+
+Download model weights into ``data/models``.
 
 Why ModelScope by default: ``huggingface.co`` is unreachable from some
 networks (including the machine this was built on) while

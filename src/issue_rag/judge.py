@@ -1,4 +1,6 @@
-"""LLM-as-judge scoring with the mapping moved out of the model.
+"""LLM 判分：四个事实性子问题 + 代码映射 verdict，判定不交给模型。
+
+LLM-as-judge scoring with the mapping moved out of the model.
 
 Why this is not "ask the model to rate the answer"
 --------------------------------------------------
@@ -116,7 +118,9 @@ def parse_json_object(text: str) -> dict[str, Any] | None:
 
 
 def verdict_from_checks(checks: dict[str, Any]) -> str:
-    """Map the four factual answers to a verdict. No model discretion here.
+    """把四个事实性回答映射成 verdict，判定在这里由代码决定、不让模型拍板。
+
+    Map the four factual answers to a verdict. No model discretion here.
 
     The table, in words:
 

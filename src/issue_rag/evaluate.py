@@ -1,4 +1,6 @@
-"""Run the experiment matrix and emit the results table.
+"""跑实验矩阵、出结果表；--regrade 复用答案只换判分器。
+
+Run the experiment matrix and emit the results table.
 
 Every row of the output answers one question an interviewer would ask:
 
@@ -89,7 +91,9 @@ def answered_with_citation(answer: str) -> bool:
 def evaluate_retrieval(
     retriever: Any, items: list[dict[str, Any]], top_k: int
 ) -> dict[str, float]:
-    """Retrieval quality on two different questions, because they differ.
+    """检索质量：原 issue 级 recall 是恒等式（标题前缀 → 金标必排第 1），改用评论级 gold chunk。
+
+    Retrieval quality on two different questions, because they differ.
 
     The original metrics asked "did we find the *issue* the question came from".
     On this corpus that is close to a tautology: the query is the issue title and
@@ -219,7 +223,9 @@ INCOMPLETE_VERDICTS = frozenset({"error", "unparsed"})
 
 
 def finished_ids(records: dict[str, dict[str, Any]]) -> set[str]:
-    """Item ids whose last record is a real verdict, i.e. safe to skip."""
+    """返回「真正有判定」的 item 集合，error/unparsed 不算完成、resume 会重跑。
+
+    Item ids whose last record is a real verdict, i.e. safe to skip."""
     return {
         item_id
         for item_id, record in records.items()

@@ -1,4 +1,6 @@
-"""Rewrite eval queries the way a user would ask them, and re-measure retrieval.
+"""把评测查询改写成用户口语并重测检索（标题优势实验）。
+
+Rewrite eval queries the way a user would ask them, and re-measure retrieval.
 
 Why this experiment exists
 --------------------------

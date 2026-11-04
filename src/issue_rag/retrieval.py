@@ -1,4 +1,6 @@
-"""Retrieval: lexical (BM25), dense (bge), hybrid fusion, and cross-encoder rerank.
+"""四种检索：BM25、dense、RRF 混合、cross-encoder 重排。
+
+Retrieval: lexical (BM25), dense (bge), hybrid fusion, and cross-encoder rerank.
 
 The four configurations exist so the results table can show *where the gain
 comes from* rather than just that some pipeline works. Every ablation answer an
@@ -234,7 +236,9 @@ class DenseRetriever:
 def reciprocal_rank_fusion(
     rankings: Iterable[Sequence[int]], k: int = 60, pool: int = 200
 ) -> list[tuple[int, float]]:
-    """Fuse multiple ranked index lists without needing comparable scores."""
+    """倒数排名融合：只看名次、不比较分数，让 BM25 与余弦分可以混合。
+
+    Fuse multiple ranked index lists without needing comparable scores."""
     fused: dict[int, float] = {}
     for ranking in rankings:
         for rank, idx in enumerate(ranking[:pool]):

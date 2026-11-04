@@ -1,4 +1,6 @@
-"""Mine question/answer pairs from harvested issues and build the eval set.
+"""从维护者回复里挖问答对、经人工复核建评测集。
+
+Mine question/answer pairs from harvested issues and build the eval set.
 
 This is the stage that decides whether the project is worth anything, so the
 filtering rules are explicit rather than clever.

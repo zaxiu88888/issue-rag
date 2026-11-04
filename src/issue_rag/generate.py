@@ -1,4 +1,6 @@
-"""Generation backends.
+"""生成后端：本地 HF 模型 或 OpenAI 兼容 API，带超时与可重试的重试。
+
+Generation backends.
 
 Two implementations, one interface: a local HuggingFace chat model (the default,
 because the whole point is that anyone can reproduce the numbers with no API
@@ -160,7 +162,9 @@ class OpenAICompatChatModel:
         max_new_tokens: int,
         temperature: float,
     ) -> dict[str, Any]:
-        """POST the completion, retrying transient failures.
+        """POST 补全请求并重试瞬时失败：本机 TLS 被中间解密会掐长连接。
+
+        POST the completion, retrying transient failures.
 
         A single hung socket once cost 1,031 seconds in the middle of a run.
         ``urlopen``'s timeout does not cover a connection that stalls mid-body,

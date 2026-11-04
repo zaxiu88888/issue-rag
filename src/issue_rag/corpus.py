@@ -1,4 +1,6 @@
-"""Turn harvested issues + comments into a retrieval corpus.
+"""把抓到的 issue 与评论清洗、去机器人、按评论分块成检索语料。
+
+Turn harvested issues + comments into a retrieval corpus.
 
 Retrieval unit
 --------------
@@ -55,7 +57,9 @@ def clean_text(text: str) -> str:
 
 
 def chunk_text(text: str, max_chars: int = MAX_CHUNK_CHARS, overlap: int = CHUNK_OVERLAP) -> list[str]:
-    """Split on paragraph boundaries, packing paragraphs up to ``max_chars``."""
+    """按段落边界分块，尽量塞满 max_chars 并在块间保留 overlap。
+
+    Split on paragraph boundaries, packing paragraphs up to ``max_chars``."""
     text = text.strip()
     if not text:
         return []

@@ -1,4 +1,6 @@
-"""Minimal GitHub REST client built for issue-corpus harvesting.
+"""面向 issue 语料抓取的最小 GitHub REST 客户端（缓存 / 限流 / 重试 / gzip）。
+
+Minimal GitHub REST client built for issue-corpus harvesting.
 
 Three constraints shaped this module:
 

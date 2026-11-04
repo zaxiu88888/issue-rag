@@ -1,4 +1,6 @@
-"""Blind human review of a sample of graded answers.
+"""人工盲评：分层抽样建队列 + 本地盲评页 + 加权 κ 评分。
+
+Blind human review of a sample of graded answers.
 
 Why this module exists
 ----------------------
@@ -367,7 +369,6 @@ PAGE = """<!doctype html>
   button {{ font: inherit; padding: .6rem 1.1rem; border-radius: 7px; border: 1px solid #ccc;
            background: #fff; cursor: pointer; }}
   button:hover {{ background: #f2f2f2; }}
-  button.primary {{ background: #1a1a1a; color: #fff; border-color: #1a1a1a; }}
   button.c {{ border-color: #2e7d32; color: #2e7d32; }}
   button.p {{ border-color: #b26a00; color: #b26a00; }}
   button.i {{ border-color: #b3261e; color: #b3261e; }}
@@ -402,7 +403,6 @@ PAGE = """<!doctype html>
 
 <script>
 const QUEUE = /*QUEUE_START*/{queue}/*QUEUE_END*/;
-let cursor = 0;
 const decisions = JSON.parse(localStorage.getItem("{storage_key}") || "{{}}");
 
 function pending() {{ return QUEUE.filter(e => !decisions[e.key]); }}

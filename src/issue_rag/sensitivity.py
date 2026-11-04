@@ -1,4 +1,6 @@
-"""Compare two runs that differ only in who graded them.
+"""对比两次只差「谁来判分」的跑批，判定哪些结论站得住。
+
+Compare two runs that differ only in who graded them.
 
 This is the module that makes the project's central claim reproducible. The claim
 is not "retrieval quadruples accuracy"; it is **"retrieval helps by somewhere
