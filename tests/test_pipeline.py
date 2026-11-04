@@ -1040,6 +1040,45 @@ def test_holistic_judge_is_opt_in_and_never_maps_through_the_checks():
     assert "four" not in FakeModel.calls[0].lower(), "must not ask the four questions"
 
 
+def test_paraphrase_clean_strips_model_wrappers():
+    """The rewrite comes back as prose; label prefixes and quotes must go.
+
+    A stray 'Question:' prefix would enter the index as a token that appears
+    nowhere in the corpus, which is a small but real distortion of the query.
+    """
+    from issue_rag.paraphrase import _clean
+
+    assert _clean("Question: Why does the watch mode hang?") == "Why does the watch mode hang?"
+    assert _clean('  "How do I disable CSS preloading?"  ') == "How do I disable CSS preloading?"
+    assert _clean("Why   does\nthis\tbreak?") == "Why does this break?"
+
+
+def test_paraphrase_keeps_every_other_field_identical():
+    """Only the query string may change, or the A/B stops being an A/B.
+
+    If item ids, issue numbers or reference comments drifted, the two arms would
+    be scoring different questions instead of the same question asked differently.
+    """
+    from issue_rag.paraphrase import _with_queries
+
+    items = [
+        {
+            "id": "q1",
+            "query": "title wording",
+            "issue_number": 7,
+            "reference_comment_ids": [111],
+            "reference_answer": "answer",
+        }
+    ]
+    clone = _with_queries(items, {"q1": "user wording"})[0]
+
+    assert clone["query"] == "user wording"
+    assert clone["issue_number"] == items[0]["issue_number"]
+    assert clone["reference_comment_ids"] == items[0]["reference_comment_ids"]
+    assert clone["reference_answer"] == "answer"
+    assert items[0]["query"] == "title wording", "input must not be mutated"
+
+
 def test_static_site_degrades_gracefully_with_no_harvested_data(monkeypatch):
     """CI has no `data/results`, and the exporter must still produce a page.
 

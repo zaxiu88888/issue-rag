@@ -304,7 +304,7 @@ worse per failure and easy to miss if you report one accuracy number.
 two separable problems — grounding and citation fidelity — and that fixing one can
 make the other more visible.
 
-### 2. The four retrieval configurations are indistinguishable — four ways
+### 2. The four retrieval configurations are indistinguishable — *on title queries*
 
 BM25 0.700, hybrid 0.695, rerank 0.679, dense 0.632. That is a 0.07 spread, and
 four independent lines say it is not a ranking:
@@ -323,11 +323,29 @@ four independent lines say it is not a ranking:
 That third point is the one to say out loud, because it is a claim I had to
 withdraw rather than a claim I never made.
 
+**But there is a fifth line now, and it flips the headline.** Rewrite the 95 titles
+as user questions and re-run the answers, and the ordering changes:
+
+| system | title | paraphrase | Δ |
+|---|---|---|---|
+| bm25 | **0.700** | 0.674 | −0.026 |
+| hybrid_rerank | 0.679 | **0.795** | **+0.116** |
+
+The reranker wins by 0.12 under user-voiced queries, and the closed-book row rises
+(0.221 → 0.289) because a paraphrase spells out the problem more explicitly. So the
+honest claim is: **"indistinguishable" holds when the query echoes the corpus
+wording (titles); when a user asks in their own words, the reranker separates and
+the four-stop ordering is real.** The ranking is not a property of the retrievers
+alone — it is a property of the query, and that is the most transferable thing in
+this whole repo.
+
 **Why this matters:** anyone can report a 1.0. Reporting that your own metric is
 degenerate, explaining the construct, and then *replacing* it — the issue-level
 `recall@5` was a tautology (98–99.8% of each window was chunks of the gold issue
 itself, and leave-one-out was zero by definition), so it is now scored on the
-answering comment — is what separates measurement from marketing.
+answering comment — is what separates measurement from marketing. Then re-running
+the *whole thing* on paraphrased queries and watching the ranking flip is what
+separates an eval from a screenshot.
 
 ### 3. Better retrieval is not the same as better answers
 
@@ -343,7 +361,9 @@ not a bigger model.
 
 - **95 eval items**, hand-reviewed down from 200 mined candidates (47.5% keep rate)
 - 771 issues, 2,593 comments → **5,473 corpus documents**
-- closed_book **0.221**; retrieval configurations **0.632–0.700** (shipped rubric ③)
+- closed_book **0.221**; retrieval configurations **0.632–0.700** (shipped rubric ③, title queries)
+- **paraphrased queries flip the ranking**: rerank 0.679 → **0.795**, bm25 0.700 → 0.674,
+  closed_book 0.221 → 0.289 — "indistinguishable" holds only for title queries
 - gain **2.3×–3.2×** across two judges: 3.17× (chat) vs 2.33× (reasoner)
 - `correct` **8.4% → 64.2%**; fabrication **1.1% → 20–28%**
 - on the 87 items closed-book missed: **0.149 → 0.621–0.678**

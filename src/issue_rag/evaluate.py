@@ -591,6 +591,16 @@ def write_report(
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run the evaluation matrix")
     parser.add_argument("--preset", default="vercel-ai")
+    parser.add_argument(
+        "--evalset",
+        default=EVALSET_FILE,
+        help=(
+            "which item file to evaluate, relative to the preset's processed dir. "
+            "The default is the reviewed set; `evalset_paraphrase.jsonl` is the same "
+            "items with user-voiced queries, which is how the title-versus-paraphrase "
+            "experiment is run"
+        ),
+    )
     parser.add_argument("--systems", default=",".join(DEFAULT_SYSTEMS))
     parser.add_argument("--top-k", type=int, default=5)
     parser.add_argument("--limit", type=int, default=0, help="0 = all eval items")
@@ -746,7 +756,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"loaded from .env: {', '.join(loaded)}")
     preset = load_preset(args.preset)
 
-    evalset_path = preset.processed_dir / EVALSET_FILE
+    evalset_path = preset.processed_dir / args.evalset
     items = load_jsonl(evalset_path)
     if not items:
         raise SystemExit(

@@ -429,6 +429,71 @@ window is chunks of the gold issue itself.** The retriever finds the right threa
 that thread. Any issue-level "was the right issue retrieved" metric is therefore
 ~1.0 by construction for every retriever, which is why it was replaced.
 
+### Paraphrased queries: does the title advantage hold?
+
+Yes, and the ranking among retrievers changes. `python -m issue_rag.paraphrase`
+rewrites all 95 titles as questions a developer would actually type — keeping the
+version numbers, API names and identifier strings but abandoning the title's
+wording — then re-runs every retriever over both query sets. Relevance is again the
+answering comment.
+
+| retriever | gold chunk@5 (title) | gold chunk@5 (paraphrase) | Δ | MRR (title) | MRR (paraphrase) | Δ |
+|---|---|---|---|---|---|---|
+| `bm25` | 0.611 | **0.526** | **−0.084** | 0.280 | 0.264 | −0.016 |
+| `dense` | 0.516 | 0.558 | +0.042 | 0.206 | 0.242 | +0.036 |
+| `hybrid` | 0.579 | 0.558 | −0.021 | 0.247 | 0.271 | +0.024 |
+| `hybrid + rerank` | 0.621 | **0.716** | **+0.095** | 0.289 | 0.359 | +0.070 |
+
+Two things happen at once, and both matter:
+
+1. **The lexical advantage was real.** BM25 is the only retriever that gets worse
+   when the query stops echoing the title (−0.084). Its row in the main table above
+   is therefore optimistic, and that caveat used to be a guess in
+   [Limitations](#limitations) — now it is a measurement.
+2. **The tie between the four retrievers was partly an artefact of title queries.**
+   Under user-voiced queries the spread widens from 0.10 to 0.19 and the reranker
+   separates: 0.716 versus 0.526 for BM25. "Cannot rank the retrievers" holds for
+   titles, weakens for paraphrase — which is what you would expect if lexical
+   matching was flattening the field.
+
+What the paraphrases deliberately keep is the vocabulary: an honest rewrite of a
+technical question cannot drop `optimizeDeps.exclude` or `Vite 8.0.13`, because
+that is the question. Median title-token retention is 0.62, and all 11 titles
+carrying a version number keep it. A harsher condition — abstracting the
+identifiers away — would test "a user who does not know the API name", which is a
+different (and interesting) question, and is not run here.
+
+The end-to-end answers were re-run on the paraphrased queries too, and **the
+ranking flips**. This is the single biggest change to a headline claim in the
+history of this project:
+
+| system | accuracy (title) | accuracy (paraphrase) | Δ |
+|---|---|---|---|
+| `closed_book` | 0.221 | 0.289 | +0.068 |
+| `bm25` | **0.700** | 0.674 | −0.026 |
+| `dense` | 0.632 | 0.658 | +0.026 |
+| `hybrid` | 0.695 | 0.668 | −0.027 |
+| `hybrid + rerank` | 0.679 | **0.795** | **+0.116** |
+
+Read the two halves separately:
+
+1. **"Cannot rank the retrievers" is true for title queries and false for user
+   queries.** Under paraphrase the reranker wins by 0.12 over BM25 (0.795 vs
+   0.674), and the spread among the four widens from 0.07 to 0.14. The earlier
+   "indistinguishable" finding was partly an artefact of the easiest possible
+   query construction.
+2. **The closed-book row rises too.** A paraphrased question spells out the
+   problem more explicitly, so the model answers more of it from memory
+   (0.221 → 0.289) — and its fabrication rate rises with it (1.1% → 6.3%).
+   The closed-book ↔ retrieval gain therefore *compresses* (3.17× → 2.75×) even
+   though the ordering among retrievers got *clearer*. Both directions belong in
+   the story.
+
+The title-query numbers remain the canonical table (they are the harder
+closed-book baseline and the easier lexical case; both matter), but the claim to
+carry out of this section is: **the ranking of retrievers is not a property of the
+retrievers alone — it depends on how close the query is to the corpus wording.**
+
 <!-- RESULTS:END -->
 
 ### The rubric itself was an experiment
@@ -561,10 +626,16 @@ Stated plainly, because a results table without limitations is marketing.
   auditable: 200 candidates reviewed, 95 kept (47.5%).
 * **One repository, one domain.** Conclusions about BM25-versus-dense weighting
   are domain-specific; a different preset will reorder the table.
-* **Title-as-query favours lexical matching.** BM25 gets a slightly easier task
-  than it would with paraphrased questions. With the comment-level metric in place
-  this is now measurable rather than hidden, but a paraphrase-based query set is
-  still the honest next step.
+* **Title-as-query favours lexical matching — now measured, and it does.** The eval
+  queries are issue titles, which sit close to the maintainer's own wording. A
+  paraphrase experiment (`python -m issue_rag.paraphrase`) rewrites all 95 queries
+  as user-voiced questions that keep the technical identifiers, and re-runs the
+  retrievers over both query sets. Result: **BM25 drops 8.4 points (0.611 → 0.526)
+  while the reranker gains 9.5 (0.621 → 0.716)** and dense gains as well. So the
+  "the four retrievers are indistinguishable" finding holds *for title queries* and
+  weakens for real user questions — see
+  [Paraphrased queries](#paraphrased-queries-does-the-title-advantage-hold). The
+  main table's BM25 row should be read as optimistic.
 * **English-only retrieval.** The corpus is English issue text, the BM25 tokenizer
   applies English stopwords/stemming, and the embedding model is
   `bge-base-en-v1.5` — an English-only checkpoint. A question asked in another
